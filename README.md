@@ -30,7 +30,7 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
 2. **Build → Authentication → Get started.** Enable **Google** and **Email/Password**.
    - Under **Settings → Authorized domains**, add your Vercel domain (e.g. `wortschatz-4034.vercel.app`).
 3. **Build → Firestore Database → Create database.** Choose production mode and the `eur3` region (Europe).
-4. **Project settings → Your apps → Web app (</>).** Register it and copy the config values into `.env.local` (see `.env.example`).
+4. **Settings → General → Your apps → Web app (</>).** Register it. The public config for this project is already committed in `.env.production` and `.env.development`; this config is not secret.
 5. Deploy the rules and hosting from your machine:
    ```bash
    npm i -g firebase-tools

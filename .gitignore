@@ -5,7 +5,6 @@ dev-dist
 .env.local
 .env.*.local
 .firebase
-.firebaserc
 .vercel
 *.log
 .DS_Store
