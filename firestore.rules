@@ -21,6 +21,23 @@ service cloud.firestore {
         && request.resource.data.learning is int && request.resource.data.learning <= 50000;
     }
 
+    // Wort-Duell: two signed-in players answer the same 10 questions. Readable by code, never listable.
+    match /duels/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && request.resource.data.host == request.auth.uid
+        && request.resource.data.keys().hasOnly(['host', 'hostName', 'guest', 'guestName', 'state', 'qs', 'pA', 'pB', 'created', 'label'])
+        && request.resource.data.qs.size() <= 20 && request.resource.data.guest == '';
+      allow update: if signedIn() && (
+        (resource.data.host == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pA', 'state']))
+        || (resource.data.guest == '' && request.resource.data.guest == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guest', 'guestName', 'state']))
+        || (resource.data.guest == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pB', 'state'])));
+      allow delete: if signedIn() && resource.data.host == request.auth.uid;
+    }
+
     // Shared AI-generated example sentences, one doc per word rank.
     // Create-once: nobody can overwrite or delete an existing entry from the client.
     match /sentences/{rank} {

@@ -1,6 +1,7 @@
 // Learning state + Leitner queue logic (ported from the original single-file app, extended with streak/history/XP).
 import RAW from "./data/words.json";
 import AR from "./data/ar.json";
+import { themeOrder } from "./themes.js";
 
 export const MAXR = 4034;
 export const INTERVAL = [0, 1, 2, 4, 8, 16, 32];
@@ -24,6 +25,7 @@ export const fresh = () => ({
   v: 2, start: 0, cursor: 1, goal: 10, known: {}, learn: {}, today: { date: "", ranks: [] },
   hist: {}, streak: { n: 0, last: "" }, xp: 0, updated: 0,
   lang: "en", custom: {}, nextCustom: CUSTOM_BASE,
+  path: { mode: "freq", theme: "" }, // where new daily words come from: frequency order or one theme
 });
 
 export let S = fresh();
@@ -54,7 +56,12 @@ export function save() { S.updated = Date.now(); listeners.forEach((fn) => fn(S)
 
 const isTaken = (r) => S.known[r] || S.learn[r] || S.today.ranks.includes(r);
 export function pull(n) {
-  const out = []; let r = Math.max(S.cursor, 1);
+  const out = [];
+  if (S.path?.mode === "theme" && S.path.theme) {
+    for (const r of themeOrder(S.path.theme, S.start || 1)) { if (out.length >= n) break; if (!isTaken(r)) out.push(r); }
+    if (out.length >= n) return out; // theme exhausted → top up from the frequency list
+  }
+  let r = Math.max(S.cursor, 1);
   while (out.length < n && r <= MAXR) { if (BY.has(r) && !isTaken(r) && !out.includes(r)) out.push(r); r++; }
   S.cursor = r; return out;
 }
@@ -83,6 +90,13 @@ export function markKnown(r) {
 }
 export function unmarkKnown(r) { delete S.known[r]; addLearn([r]); save(); }
 export function learnWord(r) { if (S.known[r]) delete S.known[r]; addLearn([r]); save(); }
+/** Put a lesson's words into today's list and the box (skips words already known or in the box). */
+export function startUnit(ranks) {
+  ensureToday();
+  const fresh = ranks.filter((r) => BY.has(r) && !isTaken(r));
+  S.today.ranks.push(...fresh); addLearn(fresh); save(); return fresh;
+}
+export function setPath(mode, theme = "") { S.path = { mode, theme }; save(); }
 export function moreWords(n = 10) { const got = pull(n); S.today.ranks.push(...got); addLearn(got); save(); return got; }
 export function setStart(r) {
   const first = !S.start; S.start = r; S.cursor = r;
@@ -113,6 +127,8 @@ function bump(xp) {
   // keep ~1 year of history
   const keys = Object.keys(S.hist); if (keys.length > 380) keys.sort().slice(0, keys.length - 380).forEach((k) => delete S.hist[k]);
 }
+/** Practice outside the flashcard box (quiz, games): counts towards activity, streak and points. */
+export function logPractice(n = 1) { for (let i = 0; i < n; i++) bump(1); save(); }
 export function streakNow() { const t = today(); return S.streak.last === t || S.streak.last === addDays(t, -1) ? S.streak.n : 0; }
 export function wordState(r) {
   if (S.known[r]) return "known";

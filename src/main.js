@@ -4,6 +4,7 @@ import { BY, WORDS, MAXR, LEVELS, INTERVAL, today, addDays, customWords } from "
 import { SENT, pending, getSentences, onAI, aiCall } from "./ai.js";
 import * as AI from "./ai.js";
 import { cloud } from "./cloud.js";
+import * as Learn from "./learn.js";
 import { esc, keyOf, wordHTML, posLabel, isNoun, tile, freqHTML, caseOf, attachPhotos, sayText, hasPicture, photosOn, setPhotos } from "./visuals.js";
 
 window.__BY = BY;
@@ -113,7 +114,7 @@ function startHTML() {
 function renderHeute() {
   if (!St.S.start) { main.innerHTML = startHTML(); return; }
   const d = new Date(); const s = St.stats();
-  main.innerHTML = `<div class="page-head"><div><h1>Heute</h1><p>${d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}</p></div>
+  main.innerHTML = `<div class="page-head"><div><h1>Heute</h1><p>${d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })} · ${Learn.pathChip()}</p></div>
       <div class="row"><button class="btn" data-act="more">+ ${St.S.goal} Wörter</button><button class="btn primary" data-act="practice">Üben${s.due ? ` · ${s.due}` : ""}</button></div></div>
     ${statsHTML()}${aiNote()}
     ${St.S.today.ranks.length ? `<ul class="wlist" id="todayList">${St.S.today.ranks.map(wordRow).join("")}</ul>`
@@ -475,10 +476,21 @@ function hideTip() { $("tip").hidden = true; }
 document.addEventListener("pointerover", (e) => { const el = e.target.closest?.("[data-tip]"); if (el) showTip(e, el.dataset.tip); });
 document.addEventListener("pointerout", (e) => { if (e.target.closest?.("[data-tip]")) hideTip(); });
 
+Learn.initLearn({ gloss, trW, isAr, spkBtn, speak, toast, sentHTML, openWord });
+
 /* ---------- routing / render ---------- */
+const TAB_OF = { thema: "themen", karten: "ueben", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
+const VIEWS = {
+  heute: () => renderHeute(), karten: () => renderKarten(), woerter: () => renderWoerter(), stand: () => renderStand(),
+  themen: () => Learn.renderThemen(), thema: () => Learn.renderThema(viewArg), ueben: () => Learn.renderUeben(),
+  schreiben: () => Learn.renderSchreiben(), quiz: () => Learn.renderQuiz(), artikel: () => Learn.renderArtikel(),
+  erklaer: () => Learn.renderErklaer(), duell: () => Learn.renderDuell(viewArg),
+};
+let viewArg = "";
 function render() {
-  document.querySelectorAll("#dock a").forEach((a) => (a.dataset.v === view ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
-  if (view === "heute") renderHeute(); else if (view === "karten") renderKarten(); else if (view === "woerter") renderWoerter(); else renderStand();
+  const tab = TAB_OF[view] || view;
+  document.querySelectorAll("#dock a").forEach((a) => (a.dataset.v === tab ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+  (VIEWS[view] || VIEWS.heute)();
   renderBadge(); syncLang();
 }
 function renderBadge() { const n = St.S.start ? St.dueDeck().length : 0; const b = $("dueBadge"); b.hidden = !n; b.textContent = n > 99 ? "99+" : n; }
@@ -490,12 +502,14 @@ let rs = 0; function renderSoon() { cancelAnimationFrame(rs); rs = requestAnimat
     });
     const note = AI.aiState; if (note !== renderSoon.last) { renderSoon.last = note; const html = aiNote(); const old = main.querySelector(".note"); if (old) old.remove(); if (html) $("stats")?.insertAdjacentHTML("afterend", html); }
   } else if (view === "karten") { const r = St.dueDeck()[0]; const b = document.querySelector(".face.back"); if (r && b) { b.innerHTML = cardBack(BY.get(r), St.S.learn[r]); attachPhotos(b); } }
+  Learn.refreshSentences(view);
   if (sheetWord && $("sheetSent")) $("sheetSent").innerHTML = sentHTML(sheetWord);
 }); }
 onAI(renderSoon);
 function route() {
-  const h = (location.hash || "#heute").slice(1); const v = ["heute", "karten", "woerter", "stand"].includes(h) ? h : "heute";
-  if (v !== view) { view = v; flipped = false; window.scrollTo({ top: 0 }); }
+  const [h, arg = ""] = decodeURIComponent((location.hash || "#heute").slice(1)).split("/");
+  const v = VIEWS[h] ? h : "heute";
+  if (v !== view || arg !== viewArg) { Learn.leave(); view = v; viewArg = arg; flipped = false; window.scrollTo({ top: 0 }); }
   render();
   if (view === "karten") getSentences(St.dueDeck().slice(0, 8));
   if (view === "heute" && St.S.start) getSentences([...St.S.today.ranks, ...St.peek(4)]);
@@ -520,6 +534,7 @@ document.addEventListener("change", (e) => {
 document.addEventListener("input", (e) => {
   if (e.target.id === "q") { dict.q = e.target.value; dict.limit = 120; renderWoerter(true); }
   if (e.target.id === "mineText") mine.text = e.target.value;
+  Learn.onInput(e);
   if (e.target.id === "mineTopic") mine.topic = e.target.value;
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "mineTopic") { e.preventDefault(); mineTopic(); } });
@@ -528,6 +543,7 @@ document.addEventListener("click", async (e) => {
   if (t.dataset.say) { e.stopPropagation(); speak(t.dataset.say); return; }
   if (t.id === "flipInner") { flip(); return; }
   if (t.dataset.open) { openWord(Number(t.dataset.open)); return; }
+  if (Learn.onClick(t, e)) return;
   if (t.dataset.start) {
     const r = Number(t.dataset.start); const first = !St.S.start; St.setStart(r);
     if (first) { render(); getSentences([...St.S.today.ranks, ...St.peek(6)]); } else { toast(`Neue Wörter ab Rang ${r}`); render(); }
@@ -576,7 +592,9 @@ document.addEventListener("click", async (e) => {
   }
 });
 $("accountBtn").addEventListener("click", () => openAccount());
+document.addEventListener("submit", (e) => Learn.onSubmit(e));
 document.addEventListener("keydown", (e) => {
+  if (Learn.onKey(e, view)) return;
   if (view !== "karten" || $("sheet").open || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;
   if ((e.key === " " || e.key === "Enter") && !flipped && $("flip")) { e.preventDefault(); flip(); }
   else if (flipped && (e.key === "ArrowLeft" || e.key === "1")) doAnswer(false);

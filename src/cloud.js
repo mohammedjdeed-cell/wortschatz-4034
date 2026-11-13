@@ -87,7 +87,12 @@ export const cloud = {
     const snap = await fs.getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
-  async readSentences(ranks) {
+  /* ---------- Wort-Duell (online, two accounts) ---------- */
+  async createDuel(code, data) { const { db, fs } = F; await fs.setDoc(fs.doc(db, "duels", code), { ...data, host: user.uid, created: fs.serverTimestamp() }); },
+  async getDuel(code) { const { db, fs } = F; const s = await fs.getDoc(fs.doc(db, "duels", code)); return s.exists() ? s.data() : null; },
+  async updateDuel(code, fields) { const { db, fs } = F; await fs.updateDoc(fs.doc(db, "duels", code), fields); },
+  watchDuel(code, cb) { const { db, fs } = F; return fs.onSnapshot(fs.doc(db, "duels", code), (s) => cb(s.exists() ? s.data() : null), () => cb(null)); },
+    async readSentences(ranks) {
     if (!F) return {}; const { db, fs } = F; const out = {};
     for (let i = 0; i < ranks.length; i += 30) {
       const ids = ranks.slice(i, i + 30).map(String);
