@@ -13,7 +13,8 @@ service cloud.firestore {
     // Public profile card for the leaderboard (readable by signed-in users only).
     match /profiles/{uid} {
       allow read: if signedIn();
-      allow write: if isOwner(uid)
+      allow delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['name', 'photo', 'known', 'learning', 'streak', 'xp', 'updated'])
         && shortStr(request.resource.data.name, 60)
         && request.resource.data.known is int && request.resource.data.known <= 4034
