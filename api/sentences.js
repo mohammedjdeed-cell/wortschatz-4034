@@ -37,6 +37,7 @@ const SCHEMAS = {
   words: list(obj({ q: str, ok: { type: "boolean" }, w: str, art: str, pos: str, e: str, ar: str, ...SENT_FIELDS })),
   topic: list(obj({ w: str, art: str, pos: str, e: str, ar: str, ...SENT_FIELDS })),
   translate: list(obj({ r: { type: "integer" }, ar: str })),
+  categorize: list(obj({ r: { type: "integer" }, c: { type: "string", enum: ["basis", "zeit", "zahlen", "menschen", "koerper", "medizin", "gefuehle", "sprechen", "alltag", "raum", "wohnen", "essen", "arbeit", "geld", "bildung", "staat", "gesellschaft", "natur", "reisen", "technik", "eigenschaften", "abstrakt"] } })),
 };
 
 const AUDIENCE = `You write vocabulary material for an Arabic-speaking medical doctor learning German (B1 to C1) for the Fachsprachprüfung.`;
@@ -58,6 +59,30 @@ const PROMPTS = {
   sentences: `${AUDIENCE}\nFor each dictionary word, return one object. r: the rank number given. ar: short Arabic meaning (max 5 words).\n${FIELD_RULES}\nWrite original sentences.`,
   words: `${AUDIENCE}\nThe learner typed their own words (possibly misspelled, inflected, with or without article, or in English/Arabic). For each input return one object:\n- q: the input exactly as given.\n- ok: false if it is not a real German word or phrase you can identify; then leave the other fields "".\n${WORD_RULES}\n${FIELD_RULES}`,
   topic: `${AUDIENCE}\nSuggest useful German words for the requested topic and level, most useful first. No duplicates, no words from the exclude list. Prefer words a doctor in a German hospital would really need when the topic is medical.\n${WORD_RULES}\n${FIELD_RULES}`,
+  categorize: `Assign each German dictionary word to exactly ONE situational theme, judged by its MOST COMMON meaning. Themes:
+basis = function words: articles, pronouns, prepositions, conjunctions, particles, modal/auxiliary verbs (sein, haben, werden, können).
+zeit = time, dates, frequency, calendar (Jahr, heute, oft, Montag, früh).
+zahlen = numbers, quantities, measures, amounts (zwei, viel, Prozent, Meter, Hälfte).
+menschen = people, family, relationships, roles in private life (Mann, Kind, Freund, heiraten).
+koerper = body parts, senses, health in everyday life, sleep (Kopf, Auge, krank, schlafen, müde).
+medizin = clinical/medical: doctors, hospital, diseases, treatment, drugs (Arzt, Patient, Behandlung, Krankenhaus, Schmerz, Operation, Blut).
+gefuehle = emotions, attitudes, character (Angst, Freude, lieben, hoffen, stolz).
+sprechen = speaking, thinking, knowing, information, communication (sagen, fragen, meinen, Frage, Brief, erklären).
+alltag = general everyday actions with no clear topic (machen, geben, nehmen, legen, suchen, brauchen, versuchen).
+raum = places, space, position, direction, movement (Ort, oben, kommen, gehen, links, Weg, liegen).
+wohnen = home, house, furniture, household (Haus, Zimmer, Tür, Bett, wohnen).
+essen = food, drink, cooking, eating out (Brot, trinken, Kaffee, kochen).
+arbeit = work, jobs, companies, office, careers (Arbeit, Chef, Firma, Beruf, arbeiten).
+geld = economy, money, buying, prices, trade (Geld, kaufen, teuer, Markt, Kosten).
+bildung = school, university, learning, science, research, reading/writing (Schule, lernen, Studie, Buch).
+staat = state, politics, law, authorities, military (Regierung, Gesetz, Polizei, Krieg, wählen).
+gesellschaft = society, culture, media, art, sport, religion, leisure (Kultur, Film, Musik, Sport, Kirche).
+natur = nature, animals, plants, weather, environment (Baum, Hund, Wetter, Sonne).
+reisen = transport, traffic, travel, holidays (Auto, Zug, Reise, fahren, Hotel).
+technik = technology, machines, materials, computers, energy (Computer, Maschine, Stoff, Strom).
+eigenschaften = adjectives/adverbs that describe qualities and judgements without a clear topic (groß, gut, schnell, wichtig, einfach).
+abstrakt = abstract nouns/verbs for reasoning and argumentation (Problem, Ergebnis, Möglichkeit, Grund, entwickeln, Bedeutung).
+Prefer a concrete theme over eigenschaften/alltag/abstrakt when the word clearly belongs to one. Return r unchanged.`,
   translate: `Translate each German dictionary entry into a short Modern Standard Arabic meaning (max 5 words; give the 1–2 most common senses separated by "، "). The English gloss tells you the intended sense. Return r unchanged.`,
 };
 
@@ -73,8 +98,8 @@ function cors(req, res) {
 const clip = (v, n) => String(v ?? "").slice(0, n);
 
 function buildRequest(mode, body) {
-  if (mode === "sentences" || mode === "translate") {
-    const max = mode === "translate" ? 200 : 12;
+  if (mode === "sentences" || mode === "translate" || mode === "categorize") {
+    const max = mode === "sentences" ? 12 : 200;
     const words = (Array.isArray(body.words) ? body.words : []).slice(0, max)
       .map((w) => ({ r: Number(w.r), w: clip(w.w, 60), p: clip(w.p, 12), e: clip(w.e, 80) }))
       .filter((w) => Number.isInteger(w.r) && w.r > 0 && w.r <= 4034 && w.w);
