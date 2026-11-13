@@ -1,0 +1,11 @@
+node_modules
+dist
+dev-dist
+.env
+.env.local
+.env.*.local
+.firebase
+.firebaserc
+.vercel
+*.log
+.DS_Store
