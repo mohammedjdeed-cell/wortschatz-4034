@@ -110,20 +110,24 @@ const inflight = new Map();
 export let photosOn = (() => { try { return localStorage.getItem("wz-photos") !== "0"; } catch { return true; } })();
 export function setPhotos(on) { photosOn = on; try { localStorage.setItem("wz-photos", on ? "1" : "0"); } catch {} }
 
+// Wikipedia rate-limits bursts, so look photos up two at a time and never cache a failed lookup.
+let active = 0; const queue = [];
+function runQueue() { while (active < 2 && queue.length) { const job = queue.shift(); active++; job().finally(() => { active--; setTimeout(runQueue, 150); }); } }
 async function fetchPhoto(word) {
   if (word in IMG) return IMG[word];
   if (inflight.has(word)) return inflight.get(word);
-  const p = (async () => {
+  const p = new Promise((resolve) => queue.push(async () => {
     try {
       const res = await fetch(`https://de.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(word)}?redirect=true`, { headers: { Accept: "application/json" } });
-      if (!res.ok) throw 0;
+      if (res.status === 404) { IMG[word] = ""; saveImg(); return resolve(""); }
+      if (!res.ok) return resolve(""); // 429 / 5xx: try again on a later visit
       const j = await res.json();
       const src = j.type === "standard" && j.thumbnail?.source && !/\.svg/i.test(j.thumbnail.source) ? j.thumbnail.source : "";
-      IMG[word] = src ? { src, page: j.content_urls?.desktop?.page || "" } : "";
-    } catch { IMG[word] = ""; }
-    saveImg(); return IMG[word];
-  })();
-  inflight.set(word, p); return p;
+      IMG[word] = src ? { src, page: j.content_urls?.desktop?.page || "" } : ""; saveImg(); resolve(IMG[word]);
+    } catch { resolve(""); }
+    finally { inflight.delete(word); }
+  }));
+  inflight.set(word, p); runQueue(); return p;
 }
 
 const io = typeof IntersectionObserver !== "undefined" ? new IntersectionObserver((entries) => {
