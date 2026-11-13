@@ -1,10 +1,10 @@
 import "./style.css";
 import * as St from "./state.js";
-import { BY, WORDS, MAXR, LEVELS, INTERVAL, today, addDays } from "./state.js";
-import { SENT, pending, getSentences, onAI } from "./ai.js";
+import { BY, WORDS, MAXR, LEVELS, INTERVAL, today, addDays, customWords } from "./state.js";
+import { SENT, pending, getSentences, onAI, aiCall } from "./ai.js";
 import * as AI from "./ai.js";
 import { cloud } from "./cloud.js";
-import { esc, wordHTML, posLabel, isNoun, tile, freqHTML, caseOf, attachPhotos, sayText, hasPicture, photosOn, setPhotos } from "./visuals.js";
+import { esc, keyOf, wordHTML, posLabel, isNoun, tile, freqHTML, caseOf, attachPhotos, sayText, hasPicture, photosOn, setPhotos } from "./visuals.js";
 
 window.__BY = BY;
 const $ = (id) => document.getElementById(id);
@@ -16,7 +16,8 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 let view = "";
 let dir = lsGet("wz-dir") || "de";
 let flipped = false;
-let dict = { q: "", pos: "all", st: "all", limit: 120 };
+let dict = { q: "", pos: "all", st: "all", limit: 120, view: "dict" };
+let mine = { text: "", topic: "", n: 20, busy: "", err: "", preview: null };
 
 /* ---------- persistence ---------- */
 St.onChange((S) => { lsSet(LS, S); cloud.saveProgress(S, setSync); renderBadge(); });
@@ -38,10 +39,20 @@ function speak(t) {
 const SPK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>`;
 const spkBtn = (text, cls = "") => (canSpeak ? `<button class="icon-btn ${cls}" data-say="${esc(text)}" aria-label="Vorlesen" title="Vorlesen">${SPK}</button>` : "");
 
+/* ---------- translation language (English or Arabic) ---------- */
+const isAr = () => St.S.lang === "ar";
+const trW = (w) => (isAr() && w.ar ? w.ar : w.e);
+function gloss(w, cls = "gloss") { const a = isAr() && w.ar; return `<span class="${cls}${a ? " ar" : ""}"${a ? ' dir="rtl" lang="ar"' : ""}>${esc(trW(w))}</span>`; }
+function sTr(s, kind) {
+  const ar = kind === "k" ? s.ar_k : s.ar_s, en = kind === "k" ? s.ken : s.en;
+  return isAr() && ar ? `<span class="tr ar" dir="rtl" lang="ar">${esc(ar)}</span>` : `<span class="en">${esc(en)}</span>`;
+}
+function syncLang() { document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", String((St.S.lang || "en") === b.dataset.lang))); }
+
 /* ---------- shared bits ---------- */
 function sentHTML(r, { full = true } = {}) {
-  const s = SENT[r]; const w = BY.get(r);
-  if (s) {
+  const s = SENT[r] || St.S.custom?.[r]?.s; const w = BY.get(r);
+  if (s && s.de) {
     const ex = [];
     if (s.pl) ex.push(`<span>Plural: <b>${esc(s.pl)}</b></span>`);
     if (s.konj && w.p === "verb") ex.push(`<span>${esc(s.konj)}</span>`);
@@ -49,13 +60,14 @@ function sentHTML(r, { full = true } = {}) {
     if (full && s.syn) ex.push(`<span>Synonym: <b>${esc(s.syn)}</b></span>`);
     if (full && s.ant) ex.push(`<span>Gegenteil: <b>${esc(s.ant)}</b></span>`);
     return (ex.length ? `<div class="extra">${ex.join("")}</div>` : "")
-      + `<div class="sent"><span class="de">${esc(s.de)} ${spkBtn(s.de, "sm")}</span><span class="en">${esc(s.en)}</span></div>`
-      + (s.kde && full ? `<div class="sent"><span class="lbl">Klinik</span><span class="de">${esc(s.kde)}</span><span class="en">${esc(s.ken)}</span></div>` : "");
+      + `<div class="sent"><span class="de">${esc(s.de)} ${spkBtn(s.de, "sm")}</span>${sTr(s, "s")}</div>`
+      + (s.kde && full ? `<div class="sent"><span class="lbl">Klinik</span><span class="de">${esc(s.kde)}</span>${sTr(s, "k")}</div>` : "");
   }
   if (pending.has(r)) return `<div><div class="skel"></div><div class="skel s2"></div></div>`;
   return "";
 }
 function metaHTML(w) {
+  if (w.custom) return `<div class="meta"><span class="chip mine">Eigenes Wort</span><span>${esc(posLabel(w))}</span>${w.topic ? `<span>· ${esc(w.topic)}</span>` : ""}</div>`;
   const c = caseOf(w);
   return `<div class="meta"><span class="chip">#${w.r}</span><span>${esc(posLabel(w))}</span>${c ? `<span class="chip case">+ ${c}</span>` : ""}${freqHTML(w.r)}</div>`;
 }
@@ -87,7 +99,7 @@ function wordRow(r) {
   const known = !!St.S.known[r];
   return `<li class="wrow${known ? " done" : ""}" data-r="${r}">
     ${tile(w, "", { photo: true })}
-    <div class="wmain"><div class="wtitle"><span class="word">${wordHTML(w)}</span><span class="gloss">${esc(w.e)}</span></div>${metaHTML(w)}</div>
+    <div class="wmain"><div class="wtitle"><span class="word">${wordHTML(w)}</span>${gloss(w)}</div>${metaHTML(w)}</div>
     <div class="wactions">${spkBtn(sayText(w))}<label class="check" title="Kenne ich schon – durch ein neues Wort ersetzen"><input type="checkbox" data-know="${r}" ${known ? "checked disabled" : ""}>Kenne ich</label></div>
     <div class="wbody">${sentHTML(r)}</div>
   </li>`;
@@ -111,12 +123,12 @@ function renderHeute() {
 
 /* ---------- Karten ---------- */
 function cardFront(w, mode) {
-  if (mode === "en") return `<div class="lbl">Auf Deutsch?</div><div class="gloss-big">${esc(w.e)}</div><div class="meta" style="justify-content:center"><span>${esc(posLabel(w))}</span></div>`;
+  if (mode === "en") return `<div class="lbl">Auf Deutsch?</div>${gloss(w, "gloss-big")}<div class="meta" style="justify-content:center"><span>${esc(posLabel(w))}</span></div>`;
   if (mode === "bild") return `${tile(w, "xl", { photo: true })}<div class="lbl">Was ist das?</div><div class="meta" style="justify-content:center"><span>${esc(posLabel(w))}</span></div>`;
   return `<div class="meta" style="justify-content:center"><span class="chip">#${w.r}</span><span>${esc(posLabel(w))}</span></div><div class="word">${wordHTML(w)}</div>${spkBtn(sayText(w))}`;
 }
 function cardBack(w, L) {
-  return `<div class="wtitle" style="gap:12px;align-items:center">${tile(w, "", { photo: true })}<div style="flex:1;min-width:0"><div class="word">${wordHTML(w)}</div><div class="gloss">${esc(w.e)}</div></div>${spkBtn(sayText(w))}</div>
+  return `<div class="wtitle" style="gap:12px;align-items:center">${tile(w, "", { photo: true })}<div style="flex:1;min-width:0"><div class="word">${wordHTML(w)}</div><div>${gloss(w)}</div></div>${spkBtn(sayText(w))}</div>
     ${metaHTML(w)}${sentHTML(w.r)}
     <div class="lbl" style="margin-top:auto">Fach ${L.b + 1} von 7 · „Gewusst“ → wieder in ${INTERVAL[Math.min(L.b + 1, 6)]} ${INTERVAL[Math.min(L.b + 1, 6)] === 1 ? "Tag" : "Tagen"}</div>`;
 }
@@ -135,11 +147,11 @@ function renderKarten() {
   const mode = dir === "bild" && !hasPicture(w) ? "de" : dir;
   main.innerHTML = `<div class="deck">
     <div class="deckbar"><span><b class="mono" style="color:var(--fg)">${deck.length}</b> fällig · ${total} im Kasten</span>
-      <div class="seg" role="group" aria-label="Abfragerichtung">${[["de", "DE → EN"], ["en", "EN → DE"], ["bild", "Bild → DE"]].map(([k, l]) => `<button data-dir="${k}" aria-pressed="${dir === k}">${l}</button>`).join("")}</div></div>
+      <div class="seg" role="group" aria-label="Abfragerichtung">${[["de", `DE → ${isAr() ? "AR" : "EN"}`], ["en", `${isAr() ? "AR" : "EN"} → DE`], ["bild", "Bild → DE"]].map(([k, l]) => `<button data-dir="${k}" aria-pressed="${dir === k}">${l}</button>`).join("")}</div></div>
     <div class="flip${flipped ? " flipped" : ""}" id="flip">
       <span class="swipe-label l">Nochmal</span><span class="swipe-label r">Gewusst</span>
       <div class="flip-inner" id="flipInner" role="button" tabindex="0" aria-label="Karte umdrehen">
-        <div class="face front">${cardFront(w, mode)}<div class="hint">Antwort zeigen: tippen oder <span class="kbd">Leertaste</span></div></div>
+        <div class="face front">${cardFront(w, mode)}<div class="hint"><span class="hint-key">Antwort zeigen: klicken oder <span class="kbd">Leertaste</span></span><span class="hint-touch">Antippen, um die Antwort zu sehen</span></div></div>
         <div class="face back">${cardBack(w, L)}</div>
       </div>
     </div>
@@ -179,48 +191,160 @@ function bindSwipe() {
 
 /* ---------- Wörter ---------- */
 const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ß/g, "ss");
-const SEARCH = WORDS.map((w) => ({ de: norm(w.w), en: norm(w.e) }));
+const normAr = (s) => (s || "").replace(/[\u064B-\u065F\u0670\u0640]/g, "").replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه");
+const IDX = new Map();
+const idx = (w) => { let x = IDX.get(w.r); if (!x || x.src !== w) { x = { src: w, de: norm(w.w), en: norm(w.e), ar: normAr(w.ar) }; IDX.set(w.r, x); } return x; };
 function filtered() {
   const q = norm(dict.q.trim()); const num = /^#?\d+$/.test(q) ? Number(q.replace("#", "")) : 0;
-  return WORDS.filter((w, i) => {
-    if (dict.pos !== "all") {
+  const qa = normAr(dict.q.trim());
+  return [...WORDS, ...customWords()].filter((w) => {
+    if (dict.pos === "mine") { if (!w.custom) return false; }
+    else if (dict.pos !== "all") {
       if (dict.pos === "noun" ? !isNoun(w.p) : dict.pos === "other" ? isNoun(w.p) || ["verb", "adj", "prep"].includes(w.p) : w.p !== dict.pos) return false;
     }
     if (dict.st !== "all") { const s = St.wordState(w.r); if (dict.st === "learn" ? !(s === "learn" || s === "today") : s !== dict.st) return false; }
     if (!q) return true;
     if (num) return w.r === num;
-    return SEARCH[i].de.includes(q) || SEARCH[i].en.includes(q);
+    const x = idx(w); return x.de.includes(q) || x.en.includes(q) || (qa && x.ar.includes(qa));
   });
 }
 function itemHTML(w) {
   const s = St.wordState(w.r);
   const label = { new: "neu", learn: "am Lernen", today: "heute", known: "bekannt" }[s];
-  return `<li><button class="item" data-open="${w.r}">${tile(w)}<div><div class="w">${wordHTML(w)}</div><span class="e">${esc(w.e)}</span></div><span class="rank">#${w.r}</span><span class="dot ${s}" title="${label}"></span></button></li>`;
+  return `<li><button class="item" data-open="${w.r}">${tile(w)}<div><div class="w">${wordHTML(w)}</div>${gloss(w, "e")}</div><span class="rank">${w.custom ? "eigen" : "#" + w.r}</span><span class="dot ${s}" title="${label}"></span></button></li>`;
+}
+function wordsHead(active) {
+  return `<div class="page-head"><div><h1>${active === "mine" ? "Meine Wörter" : "Wörterbuch"}</h1><p>${active === "mine" ? "Eigene Wörter und KI-Wortlisten. Was schon im Wörterbuch steht, wird automatisch zugeordnet." : `${MAXR.toLocaleString("de-DE")} Wörter, nach Häufigkeit geordnet.`}</p></div>
+    <div class="seg" role="group" aria-label="Ansicht"><button data-wview="dict" aria-pressed="${active === "dict"}">Wörterbuch</button><button data-wview="mine" aria-pressed="${active === "mine"}">Meine Wörter${customWords().length ? ` · ${customWords().length}` : ""}</button></div></div>`;
 }
 function renderWoerter(onlyResults) {
+  if (dict.view === "mine") return renderMine();
   const list = filtered();
   const f = (k, v, l) => `<button data-${k}="${v}" aria-pressed="${dict[k] === v}">${l}</button>`;
   const results = `<p class="muted small" style="margin:0 0 8px">${list.length.toLocaleString("de-DE")} ${list.length === 1 ? "Wort" : "Wörter"}</p>
     ${list.length ? `<ul class="dlist">${list.slice(0, dict.limit).map(itemHTML).join("")}</ul>` : `<div class="panel empty"><p>Kein Treffer.</p></div>`}
     ${list.length > dict.limit ? `<div class="row" style="justify-content:center;margin-top:12px"><button class="btn" data-act="moreList" id="moreList">Weitere ${Math.min(120, list.length - dict.limit)} anzeigen</button></div>` : ""}`;
   if (onlyResults && $("dres")) { $("dres").innerHTML = results; syncFilters(); }
-  else main.innerHTML = `<div class="page-head"><div><h1>Wörterbuch</h1><p>${MAXR.toLocaleString("de-DE")} Wörter, nach Häufigkeit geordnet.</p></div></div>
-    <div class="searchbar"><input id="q" type="search" placeholder="Deutsch, Englisch oder #Rang" value="${esc(dict.q)}" autocomplete="off" enterkeyhint="search" aria-label="Suchen">
-    <div class="filters">${f("pos", "all", "Alle")}${f("pos", "noun", "Nomen")}${f("pos", "verb", "Verben")}${f("pos", "adj", "Adjektive")}${f("pos", "prep", "Präpositionen")}${f("pos", "other", "Andere")}<span class="sep"></span>${f("st", "all", "Jeder Status")}${f("st", "new", "Neu")}${f("st", "learn", "Am Lernen")}${f("st", "known", "Bekannt")}</div></div>
+  else main.innerHTML = `${wordsHead("dict")}
+    <div class="searchbar"><input id="q" type="search" placeholder="Deutsch, ${isAr() ? "Arabisch" : "Englisch"} oder #Rang" value="${esc(dict.q)}" autocomplete="off" enterkeyhint="search" aria-label="Suchen">
+    <div class="filters">${f("pos", "all", "Alle")}${f("pos", "mine", "Meine Wörter")}${f("pos", "noun", "Nomen")}${f("pos", "verb", "Verben")}${f("pos", "adj", "Adjektive")}${f("pos", "prep", "Präpositionen")}${f("pos", "other", "Andere")}<span class="sep"></span>${f("st", "all", "Jeder Status")}${f("st", "new", "Neu")}${f("st", "learn", "Am Lernen")}${f("st", "known", "Bekannt")}</div></div>
     <div id="dres">${results}</div>`;
   const more = $("moreList");
   if (more && "IntersectionObserver" in window) { const o = new IntersectionObserver((e) => { if (e[0].isIntersecting) { o.disconnect(); dict.limit += 120; renderWoerter(true); } }, { rootMargin: "300px" }); o.observe(more); }
 }
 function syncFilters() { document.querySelectorAll(".filters button").forEach((b) => { const k = b.dataset.pos ? "pos" : "st"; b.setAttribute("aria-pressed", String(dict[k] === b.dataset[k])); }); }
 
+/* ---------- Meine Wörter: own words, matching, AI topics ---------- */
+const TOPICS = ["Körper", "Innere Medizin", "Notaufnahme", "Gynäkologie", "Chirurgie", "Arztbrief", "Medikamente", "Technik", "Alltag", "Behörden"];
+const ARTS = /^(der|die|das|den|dem|des)\s+/i;
+let DICT_INDEX = null;
+function dictIndex() {
+  if (!DICT_INDEX) { DICT_INDEX = new Map(); WORDS.forEach((w) => w.w.split(/[,(]/)[0].split("/").forEach((k) => { const n = norm(k.trim()); if (!n) return; if (!DICT_INDEX.has(n)) DICT_INDEX.set(n, []); DICT_INDEX.get(n).push(w); })); }
+  return DICT_INDEX;
+}
+function localMatch(q, art = "") {
+  const c = dictIndex().get(norm(String(q).replace(ARTS, "").trim())); if (!c) return null;
+  const a = (art || "").split(",")[0].trim().toLowerCase();
+  return (a && c.find((w) => w.p.split(",")[0].trim() === a)) || c[0];
+}
+function parseLine(line) {
+  const [left, meaning = ""] = line.split("=").map((x) => x.trim());
+  const m = left.match(ARTS); return { raw: line.trim(), q: left.replace(ARTS, "").trim(), art: m ? m[1].toLowerCase() : "", meaning };
+}
+const ownDup = (w) => customWords().find((c) => norm(c.w) === norm(w));
+function dictItem(w, q) {
+  const st = St.wordState(w.r);
+  return { kind: "dict", r: w.r, q, st, checked: st === "new", disabled: st === "learn" || st === "today" };
+}
+function newItem(o, { meaning = "", topic = "" } = {}) {
+  const dup = ownDup(o.w);
+  const s = o.de ? { emoji: o.emoji || "", pl: o.pl || "", de: o.de, en: o.en || "", ar_s: o.ar_s || "", kde: o.kde || "", ken: o.ken || "", ar_k: o.ar_k || "", tip: o.tip || "", syn: o.syn || "", ant: o.ant || "", konj: o.konj || "" } : null;
+  return { kind: "new", data: { w: o.w, art: o.art || "", pos: o.pos || (o.art ? "noun" : "phrase"), e: meaning || o.e || "", ar: o.ar || "", topic, s }, checked: !dup, disabled: !!dup, dup: !!dup };
+}
+const aiWhy = (code) => ({ auth: "Für die KI bitte anmelden", limited: "KI gerade ausgelastet – später erneut", off: "KI ist nicht eingerichtet" })[code] || "KI nicht erreichbar";
+function previewRow(it, i) {
+  if (it.kind === "invalid") return `<li class="prow off"><span class="pcheck"></span><div class="pmain"><b>${esc(it.q)}</b><span class="muted small">${esc(it.why || "Kein deutsches Wort erkannt")}</span></div><span class="badge">nicht erkannt</span></li>`;
+  const w = it.kind === "dict" ? BY.get(it.r) : { r: -1, w: it.data.w, p: it.data.art || (it.data.pos === "noun" ? "" : it.data.pos), e: it.data.e, ar: it.data.ar, emoji: it.data.s?.emoji || "", custom: true };
+  const badge = it.kind === "dict" ? ({ new: `Im Wörterbuch #${it.r}`, known: "Schon bekannt", learn: "Schon im Kasten", today: "Schon im Kasten" })[it.st] : it.dup ? "Schon in deinen Wörtern" : "Neues eigenes Wort";
+  return `<li class="prow${it.disabled ? " off" : ""}"><label class="pcheck"><input type="checkbox" data-pi="${i}" ${it.checked ? "checked" : ""} ${it.disabled ? "disabled" : ""} aria-label="${esc(w.w)} auswählen"></label>${tile(w)}
+    <div class="pmain"><span class="word" style="font-size:1.1rem">${wordHTML(w)}</span>${gloss(w)}</div><span class="badge${it.kind === "dict" && it.st === "new" ? " dict" : ""}">${badge}</span></li>`;
+}
+function previewHTML() {
+  if (mine.busy) return `<div class="panel pad"><div class="row" style="gap:10px"><span class="spinner"></span><span class="muted">${esc(mine.busy)}</span></div></div>`;
+  if (mine.err) return `<div class="note">${esc(mine.err)}</div>`;
+  if (!mine.preview) return "";
+  const n = mine.preview.filter((x) => x.checked && !x.disabled && x.kind !== "invalid").length;
+  return `<div class="panel"><div class="panel-head" style="padding:14px 16px 0"><h2>Vorschau · ${mine.preview.length} ${mine.preview.length === 1 ? "Wort" : "Wörter"}</h2>
+      <div class="row"><button class="btn ghost" data-act="mineClear">Verwerfen</button><button class="btn primary" data-act="mineAdd" ${n ? "" : "disabled"}>${n} zum Lernen hinzufügen</button></div></div>
+    <ul class="plist">${mine.preview.map(previewRow).join("")}</ul></div>`;
+}
+function renderPreview() { const el = $("minePreview"); if (el) { el.innerHTML = previewHTML(); attachPhotos(el); } }
+function renderMine() {
+  const list = customWords();
+  main.innerHTML = `${wordsHead("mine")}
+  <div class="grid2 even">
+    <div class="panel pad stack"><h2>Wörter eingeben</h2><p class="muted small" style="margin:0">Ein Wort pro Zeile, mit oder ohne Artikel – auch falsch geschrieben oder auf Englisch/Arabisch. Optional mit Bedeutung: <span class="mono">röntgen = to x-ray</span></p>
+      <textarea id="mineText" rows="5" placeholder="die Herzinsuffizienz&#10;Blutdruck&#10;nüchtern">${esc(mine.text)}</textarea>
+      <div class="row end"><button class="btn primary" data-act="mineCheck">Prüfen und zuordnen</button></div></div>
+    <div class="panel pad stack"><h2>Wörter zu einem Thema</h2><p class="muted small" style="margin:0">Die KI schlägt passende Wörter für dein Niveau vor.</p>
+      <input id="mineTopic" class="input" type="text" maxlength="80" placeholder="z. B. Körper, Kardiologie, Technik" value="${esc(mine.topic)}">
+      <div class="filters wrap">${TOPICS.map((t) => `<button data-topic="${esc(t)}" aria-pressed="${mine.topic === t}">${t}</button>`).join("")}</div>
+      <div class="row end"><div class="seg" role="group" aria-label="Anzahl">${[10, 20, 30].map((n) => `<button data-mn="${n}" aria-pressed="${mine.n === n}">${n}</button>`).join("")}</div><button class="btn primary" data-act="mineTopic">Wörter vorschlagen</button></div></div>
+  </div>
+  <div id="minePreview" class="section" style="margin-top:16px">${previewHTML()}</div>
+  <div class="section"><h2>Deine Wörter <span class="muted small" style="font-weight:400">${list.length}</span></h2>
+    ${list.length ? `<ul class="dlist">${list.map(itemHTML).join("")}</ul>` : `<div class="panel empty"><p>Noch keine eigenen Wörter. Gib oben Wörter ein oder lass dir Wörter zu einem Thema vorschlagen.</p></div>`}</div>`;
+  attachPhotos(main);
+}
+async function mineCheck() {
+  const lines = mine.text.split(/\n|;/).map((x) => x.trim()).filter(Boolean).slice(0, 25);
+  if (!lines.length) { toast("Bitte zuerst Wörter eingeben"); return; }
+  const items = [], ask = [];
+  lines.forEach((line) => { const p = parseLine(line); const m = localMatch(p.q, p.art); if (m) items.push(dictItem(m, line)); else ask.push(p); });
+  mine.err = ""; mine.preview = items;
+  if (ask.length) {
+    mine.busy = `Die KI prüft ${ask.length} ${ask.length === 1 ? "Wort" : "Wörter"} …`; renderPreview();
+    try {
+      const res = await aiCall("words", { words: ask.map((a) => a.raw) });
+      ask.forEach((a, i) => {
+        const o = res.find((x) => x.q === a.raw) || res[i];
+        if (!o || !o.ok || !o.w) { items.push({ kind: "invalid", q: a.raw }); return; }
+        const m = localMatch(o.w, o.art); items.push(m ? dictItem(m, a.raw) : newItem(o, { meaning: a.meaning }));
+      });
+    } catch (e) {
+      ask.forEach((a) => items.push(a.meaning ? newItem({ w: a.q, art: a.art, pos: a.art ? "noun" : "phrase" }, { meaning: a.meaning }) : { kind: "invalid", q: a.raw, why: aiWhy(e.message) + " – oder Bedeutung mit „=“ angeben" }));
+    }
+  }
+  mine.busy = ""; mine.preview = items; renderPreview();
+}
+async function mineTopic() {
+  const topic = mine.topic.trim(); if (!topic) { toast("Bitte ein Thema eingeben"); return; }
+  const level = (LEVELS.find(([r]) => r === St.S.start) || [0, "B1"])[1];
+  mine.err = ""; mine.busy = `Die KI sucht ${mine.n} Wörter zum Thema „${topic}“ …`; mine.preview = null; renderPreview();
+  try {
+    const res = await aiCall("topic", { topic, n: mine.n, level, exclude: customWords().map((w) => w.w).slice(0, 300) });
+    const seen = new Set();
+    mine.preview = res.filter((o) => o.w && !seen.has(norm(o.w)) && seen.add(norm(o.w))).map((o) => { const m = localMatch(o.w, o.art); return m ? dictItem(m, o.w) : newItem(o, { topic }); });
+  } catch (e) { mine.err = aiWhy(e.message) + "."; }
+  mine.busy = ""; renderPreview();
+}
+function mineAdd() {
+  const pick = (mine.preview || []).filter((x) => x.checked && !x.disabled && x.kind !== "invalid");
+  const dictRanks = [];
+  pick.forEach((it) => { if (it.kind === "dict") { St.learnWord(it.r); dictRanks.push(it.r); } else St.addCustom(it.data); });
+  St.save(); mine.preview = null; mine.text = "";
+  renderMine(); getSentences(dictRanks);
+  toast(`${pick.length} ${pick.length === 1 ? "Wort" : "Wörter"} in den Karteikasten gelegt`);
+}
+
 function openWord(r) {
   const w = BY.get(r); const s = St.wordState(r); const L = St.S.learn[r];
   const status = s === "known" ? "Bekannt" : L ? `Im Karteikasten · Fach ${L.b + 1} · fällig ${new Date(L.due).toLocaleDateString("de-DE")}` : "Noch nicht gelernt";
   openSheet(`${tile(w, "lg", { photo: true })}
-    <div><div class="word" style="font-size:1.8rem">${wordHTML(w)}</div><div class="gloss" style="font-size:1.05rem">${esc(w.e)}</div>${metaHTML(w)}</div>
+    <div><div class="word" style="font-size:1.8rem">${wordHTML(w)}</div><div style="font-size:1.05rem">${gloss(w)}</div>${isAr() && w.ar ? `<div class="en">${esc(w.e)}</div>` : ""}${metaHTML(w)}</div>
     <div class="row">${spkBtn(sayText(w))}<span class="muted small">${status}</span></div>
     <div id="sheetSent" style="display:flex;flex-direction:column;gap:8px">${sentHTML(r)}</div>
-    <div class="row">${s === "known" ? `<button class="btn" data-act="relearn" data-r="${r}">Wieder lernen</button>` : `${!L ? `<button class="btn primary" data-act="learn" data-r="${r}">In den Karteikasten</button>` : ""}<button class="btn" data-act="known" data-r="${r}">Kenne ich</button>`}</div>
+    <div class="row">${s === "known" ? `<button class="btn" data-act="relearn" data-r="${r}">Wieder lernen</button>` : `${!L ? `<button class="btn primary" data-act="learn" data-r="${r}">In den Karteikasten</button>` : ""}<button class="btn" data-act="known" data-r="${r}">Kenne ich</button>`}${w.custom ? `<button class="btn ghost danger" data-act="delCustom" data-r="${r}">Löschen</button>` : ""}</div>
     ${photosOn && isNoun(w.p) ? `<div class="credit">Fotos: Wikipedia / Wikimedia Commons</div>` : ""}`, r);
   getSentences([r]);
 }
@@ -236,7 +360,7 @@ function dictMap() {
   const k = Object.keys(St.S.known).length, l = Object.keys(St.S.learn).length;
   c.setAttribute("aria-label", `Wörterbuch-Karte: ${k} bekannt, ${l} am Lernen, ${MAXR - k - l} neu`);
   const at = (e) => { const b = c.getBoundingClientRect(); return Math.floor(((e.clientY - b.top) / b.height) * rows) * cols + Math.floor(((e.clientX - b.left) / b.width) * cols) + 1; };
-  c.addEventListener("pointermove", (e) => { const w = BY.get(at(e)); if (!w) return hideTip(); showTip(e, `#${w.r} ${esc(w.w)} – ${esc(w.e)}`); });
+  c.addEventListener("pointermove", (e) => { const w = BY.get(at(e)); if (!w) return hideTip(); showTip(e, `#${w.r} ${w.w} – ${trW(w)}`); });
   c.addEventListener("pointerleave", hideTip);
   c.addEventListener("click", (e) => { const r = at(e); if (BY.has(r)) openWord(r); });
   return c;
@@ -278,6 +402,7 @@ function renderStand() {
   ${cloud.user ? `<div class="section"><h2>Rangliste</h2><div class="panel" id="board"><div style="padding:14px"><div class="skel"></div></div></div></div>` : ""}
   <div class="section"><h2>Einstellungen</h2><ul class="panel settings">
     <li class="stack"><div class="lab"><b>Startniveau</b><span>Ändert nur, wo neue Wörter herkommen. Gelerntes bleibt erhalten.</span></div>${levelsHTML()}</li>
+    <li><div class="lab"><b>Übersetzung</b><span>Bedeutungen und Beispielsätze auf Englisch oder Arabisch</span></div><div class="seg"><button data-lang="en">Englisch</button><button data-lang="ar">العربية</button></div></li>
     <li><div class="lab"><b>Neue Wörter pro Tag</b></div><div class="seg">${[5, 10, 15, 20].map((n) => `<button data-goal="${n}" aria-pressed="${St.S.goal === n}">${n}</button>`).join("")}</div></li>
     <li><div class="lab"><b>Darstellung</b></div><div class="seg">${[["system", "System"], ["light", "Hell"], ["dark", "Dunkel"]].map(([k2, l2]) => `<button data-theme="${k2}" aria-pressed="${theme === k2}">${l2}</button>`).join("")}</div></li>
     <li><div class="lab"><b>Fotos bei Nomen</b><span>Bilder von Wikipedia</span></div><div class="seg"><button data-photos="1" aria-pressed="${photosOn}">An</button><button data-photos="0" aria-pressed="${!photosOn}">Aus</button></div></li>
@@ -354,7 +479,7 @@ document.addEventListener("pointerout", (e) => { if (e.target.closest?.("[data-t
 function render() {
   document.querySelectorAll("#dock a").forEach((a) => (a.dataset.v === view ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
   if (view === "heute") renderHeute(); else if (view === "karten") renderKarten(); else if (view === "woerter") renderWoerter(); else renderStand();
-  renderBadge();
+  renderBadge(); syncLang();
 }
 function renderBadge() { const n = St.S.start ? St.dueDeck().length : 0; const b = $("dueBadge"); b.hidden = !n; b.textContent = n > 99 ? "99+" : n; }
 let rs = 0; function renderSoon() { cancelAnimationFrame(rs); rs = requestAnimationFrame(() => {
@@ -390,8 +515,14 @@ document.addEventListener("change", (e) => {
     }, 180);
   }
   if (e.target.id === "importFile") importBackup(e.target.files[0]);
+  if (e.target.dataset?.pi && mine.preview) { mine.preview[Number(e.target.dataset.pi)].checked = e.target.checked; renderPreview(); }
 });
-document.addEventListener("input", (e) => { if (e.target.id === "q") { dict.q = e.target.value; dict.limit = 120; renderWoerter(true); } });
+document.addEventListener("input", (e) => {
+  if (e.target.id === "q") { dict.q = e.target.value; dict.limit = 120; renderWoerter(true); }
+  if (e.target.id === "mineText") mine.text = e.target.value;
+  if (e.target.id === "mineTopic") mine.topic = e.target.value;
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "mineTopic") { e.preventDefault(); mineTopic(); } });
 document.addEventListener("click", async (e) => {
   const t = e.target.closest("button,[data-open],#flipInner"); if (!t) return;
   if (t.dataset.say) { e.stopPropagation(); speak(t.dataset.say); return; }
@@ -402,6 +533,10 @@ document.addEventListener("click", async (e) => {
     if (first) { render(); getSentences([...St.S.today.ranks, ...St.peek(6)]); } else { toast(`Neue Wörter ab Rang ${r}`); render(); }
     return;
   }
+  if (t.dataset.lang) { St.S.lang = t.dataset.lang; St.save(); syncLang(); flipped = false; render(); return; }
+  if (t.dataset.wview) { dict.view = t.dataset.wview; renderWoerter(); return; }
+  if (t.dataset.topic) { mine.topic = t.dataset.topic; const i = $("mineTopic"); if (i) i.value = mine.topic; document.querySelectorAll("[data-topic]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.topic === mine.topic))); return; }
+  if (t.dataset.mn) { mine.n = Number(t.dataset.mn); document.querySelectorAll("[data-mn]").forEach((b) => b.setAttribute("aria-pressed", String(b === t))); return; }
   if (t.dataset.dir) { dir = t.dataset.dir; lsSet("wz-dir", dir); flipped = false; renderKarten(); return; }
   if (t.dataset.pos) { dict.pos = t.dataset.pos; dict.limit = 120; renderWoerter(true); return; }
   if (t.dataset.st) { dict.st = t.dataset.st; dict.limit = 120; renderWoerter(true); return; }
@@ -422,6 +557,11 @@ document.addEventListener("click", async (e) => {
     case "known": St.retire(r); openWord(r); if (view === "woerter") renderWoerter(true); break;
     case "relearn": St.unmarkKnown(r); openWord(r); if (view === "woerter") renderWoerter(true); break;
     case "moreList": dict.limit += 120; renderWoerter(true); break;
+    case "mineCheck": mineCheck(); break;
+    case "mineTopic": mineTopic(); break;
+    case "mineAdd": mineAdd(); break;
+    case "mineClear": mine.preview = null; mine.err = ""; renderPreview(); break;
+    case "delCustom": { const w = BY.get(r); St.removeCustom(r); closeSheet(); if (view === "woerter") renderWoerter(); toast(`„${w?.w}“ gelöscht`); break; }
     case "account": openAccount(); break;
     case "mode-up": openAccount("up"); break;
     case "mode-in": openAccount("in"); break;

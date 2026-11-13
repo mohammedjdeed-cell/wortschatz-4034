@@ -1,10 +1,12 @@
 // Learning state + Leitner queue logic (ported from the original single-file app, extended with streak/history/XP).
 import RAW from "./data/words.json";
+import AR from "./data/ar.json";
 
 export const MAXR = 4034;
 export const INTERVAL = [0, 1, 2, 4, 8, 16, 32];
-export const BY = new Map(RAW.map((w) => [w[0], { r: w[0], w: w[1], p: w[2], e: w[3] }]));
+export const BY = new Map(RAW.map((w) => [w[0], { r: w[0], w: w[1], p: w[2], e: w[3], ar: AR[w[0]] || "" }]));
 export const WORDS = [...BY.values()];
+export const CUSTOM_BASE = 100001; // ids of the learner's own words start here
 export const LEVELS = [
   [1, "A1", "Anfang", "from word #1"],
   [400, "A2", "ab Rang 400", "skip the first 399"],
@@ -21,10 +23,30 @@ export const addDays = (s, n) => { const [y, m, d] = s.split("-").map(Number); r
 export const fresh = () => ({
   v: 2, start: 0, cursor: 1, goal: 10, known: {}, learn: {}, today: { date: "", ranks: [] },
   hist: {}, streak: { n: 0, last: "" }, xp: 0, updated: 0,
+  lang: "en", custom: {}, nextCustom: CUSTOM_BASE,
 });
 
 export let S = fresh();
-export function replaceState(next) { S = Object.assign(fresh(), next || {}); return S; }
+export function replaceState(next) { S = Object.assign(fresh(), next || {}); registerCustom(); return S; }
+
+/* ---------- the learner's own words ---------- */
+const POSMAP = { noun: "", verb: "verb", adj: "adj", adv: "adv", prep: "prep", conj: "conj", pron: "pron", num: "num", part: "part", interj: "interj", phrase: "phrase" };
+function customToWord(id, c) {
+  const p = c.art ? c.art : POSMAP[c.pos] ?? "phrase";
+  return { r: Number(id), w: c.w, p: p || "phrase", e: c.e || "", ar: c.ar || "", emoji: c.s?.emoji || "", custom: true, topic: c.topic || "" };
+}
+export function registerCustom() {
+  for (const r of [...BY.keys()]) if (r >= CUSTOM_BASE) BY.delete(r);
+  Object.entries(S.custom || {}).forEach(([id, c]) => BY.set(Number(id), customToWord(id, c)));
+}
+export const customWords = () => [...BY.values()].filter((w) => w.custom).sort((a, b) => (S.custom[b.r]?.added || 0) - (S.custom[a.r]?.added || 0));
+export function addCustom(c) {
+  const id = S.nextCustom || CUSTOM_BASE; S.nextCustom = id + 1;
+  S.custom[id] = { w: c.w, art: c.art || "", pos: c.pos || "", e: c.e || "", ar: c.ar || "", topic: c.topic || "", s: c.s || null, added: Date.now() };
+  BY.set(id, customToWord(id, S.custom[id])); addLearn([id]);
+  return id;
+}
+export function removeCustom(id) { delete S.custom[id]; delete S.learn[id]; delete S.known[id]; BY.delete(Number(id)); save(); }
 
 const listeners = new Set();
 export function onChange(fn) { listeners.add(fn); }

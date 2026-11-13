@@ -253,7 +253,7 @@ h2 { font-size: 1rem; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
 .item .vis { width: 36px; height: 36px; border-radius: 8px; }
 .item .vis .emo { font-size: 1.2rem; }
 .item .vis .pos { font-size: 0.66rem; }
-.item > div { min-width: 0; flex: 1; }
+.item > div:not(.vis) { min-width: 0; flex: 1; }
 .item .w { font: 600 1.02rem/1.25 var(--f-word); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item .e { font-size: 0.84rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .item .rank { font: 400 0.72rem var(--f-mono); color: var(--faint); }
@@ -310,6 +310,40 @@ h2 { font-size: 1rem; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
 .toast { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom)); padding: 9px 14px; border-radius: var(--r-sm); background: var(--ink); color: var(--ink-fg); font-size: 0.88rem; max-width: 90vw; }
 @media (max-width: 720px) { .toast { bottom: calc(84px + env(safe-area-inset-bottom)); } }
 .tip { position: fixed; z-index: 70; pointer-events: none; padding: 5px 9px; border-radius: 6px; background: var(--ink); color: var(--ink-fg); font-size: 0.78rem; white-space: nowrap; }
+
+/* Arabic translations */
+.ar { font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif; font-style: normal; direction: rtl; unicode-bidi: isolate; }
+.gloss.ar, .e.ar { font-size: 1.02em; }
+.gloss-big.ar { font: 500 1.9rem/1.4 "IBM Plex Sans Arabic", "Noto Sans Arabic", sans-serif; }
+.sent .tr.ar { color: var(--muted); font-size: 0.98rem; align-self: flex-start; }
+.hint-touch { display: none; }
+@media (pointer: coarse) { .hint-touch { display: inline; } .hint-key { display: none; } }
+.langseg button { padding: 4px 9px; font-size: 0.78rem; }
+.langseg button[lang="ar"] { font-family: "IBM Plex Sans Arabic", sans-serif; font-size: 0.9rem; line-height: 1.1; }
+
+/* Meine Wörter */
+.grid2.even { grid-template-columns: 1fr; }
+@media (min-width: 860px) { .grid2.even { grid-template-columns: 1fr 1fr; } }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+textarea, .input { width: 100%; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--bg); padding: 10px 12px; font: inherit; font-size: 0.95rem; color: var(--fg); resize: vertical; }
+.input { height: 40px; padding: 0 12px; }
+.filters.wrap { flex-wrap: wrap; overflow: visible; }
+.plist { list-style: none; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.prow { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid var(--line); }
+.prow:first-child { border-top: 0; }
+.prow.off { opacity: 0.55; }
+.prow .vis { width: 36px; height: 36px; border-radius: 8px; }
+.prow .vis .emo { font-size: 1.2rem; }
+.prow .vis .pos { font-size: 0.66rem; }
+.pcheck { width: 20px; flex: none; display: grid; place-items: center; }
+.pcheck input { width: 18px; height: 18px; accent-color: var(--ink); margin: 0; }
+.pmain { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.badge { flex: none; font-size: 0.74rem; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.badge.dict { color: var(--fg); border-color: var(--fg); }
+.chip.mine { background: var(--ink); color: var(--ink-fg); }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--fg); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 520px) { .prow { padding: 9px 12px; flex-wrap: wrap; } .badge { margin-left: 32px; } }
 
 @media (pointer: coarse) { .kbd { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

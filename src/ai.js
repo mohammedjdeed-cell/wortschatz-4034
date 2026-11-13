@@ -11,11 +11,11 @@ const API = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "") + "/api/sen
 let notify = () => {};
 export function onAI(fn) { notify = fn; }
 
-const FIELDS = ["emoji", "pl", "de", "en", "kde", "ken", "tip", "syn", "ant", "konj"];
+const FIELDS = ["emoji", "pl", "de", "en", "kde", "ken", "tip", "syn", "ant", "konj", "ar", "ar_s", "ar_k"];
 const clean = (o) => Object.fromEntries(FIELDS.map((k) => [k, String(o?.[k] ?? "").slice(0, k === "emoji" ? 16 : 240)]));
 
 export async function getSentences(ranks) {
-  const need = [...new Set(ranks)].filter((r) => BY.has(r) && !SENT[r] && !pending.has(r));
+  const need = [...new Set(ranks)].filter((r) => r <= 4034 && BY.has(r) && !SENT[r] && !pending.has(r));
   if (!need.length) return;
   need.forEach((r) => pending.add(r)); notify();
 
@@ -56,3 +56,19 @@ export async function getSentences(ranks) {
   missing.forEach((r) => pending.delete(r)); notify();
 }
 export function resetAI() { if (aiState !== "ok") aiState = "idle"; }
+
+/** Own-word lookup ("words") and topic suggestions ("topic"). Throws an Error whose message is a short reason code. */
+export async function aiCall(mode, payload) {
+  const token = await cloud.idToken();
+  if (!token && cloud.enabled) throw new Error("auth");
+  const res = await fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+    body: JSON.stringify({ mode, ...payload }),
+  });
+  if (res.status === 401) throw new Error("auth");
+  if (res.status === 429) throw new Error("limited");
+  if (res.status === 503 || res.status === 404 || res.status === 405) throw new Error("off");
+  if (!res.ok) throw new Error("err");
+  return (await res.json()).items || [];
+}

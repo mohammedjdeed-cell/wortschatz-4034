@@ -22,6 +22,10 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
   - Colour coding for der, die and das.
   - A frequency meter.
 - German text-to-speech for words and sentences.
+- **Meine Wörter (own words):**
+  - Type your own words (any spelling, with or without article). Each word is matched against the 4034-word dictionary first; the AI fills in the rest.
+  - Or ask for a topic ("Körper", "Kardiologie", "Technik") and the AI suggests words at your level. Words already in the dictionary are linked to it rather than duplicated.
+- **Translation language:** German ↔ English or German ↔ Arabic (switch in the header). All 4034 words have an Arabic meaning (`src/data/ar.json`); new AI example sentences come with Arabic translations. The dictionary search also accepts Arabic.
 
 ---
 

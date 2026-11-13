@@ -4,12 +4,12 @@ import { SENT } from "./ai.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 export const keyOf = (w) => w.w.split(/[,(]/)[0].trim();
-export const POS = { verb: "Verb", adj: "Adjektiv", adv: "Adverb", pron: "Pronomen", prep: "Präposition", conj: "Konjunktion", part: "Partikel", num: "Zahlwort", art: "Artikel", interj: "Interjektion", aux: "Hilfsverb" };
+export const POS = { phrase: "Ausdruck", verb: "Verb", adj: "Adjektiv", adv: "Adverb", pron: "Pronomen", prep: "Präposition", conj: "Konjunktion", part: "Partikel", num: "Zahlwort", art: "Artikel", interj: "Interjektion", aux: "Hilfsverb" };
 export const isNoun = (p) => /^(der|die|das)/.test(p) && !/art$/.test(p);
 export const gender = (p) => { const a = p.split(",")[0].trim(); return a === "der" || a === "die" || a === "das" ? a : ""; };
 export const posLabel = (w) => (isNoun(w.p) ? "Nomen" : POS[w.p] || w.p);
 export function wordHTML(w) {
-  if (isNoun(w.p)) return `<span class="art g-${gender(w.p)}">${esc(w.p)}</span><span>${esc(w.w)}</span>`;
+  if (isNoun(w.p)) return `<span class="art g-${gender(w.p)}">${esc(w.p)}</span> <span>${esc(w.w)}</span>`;
   return `<span>${esc(w.w)}</span>`;
 }
 export const sayText = (w) => (isNoun(w.p) ? w.p.split(",")[0] + " " : "") + keyOf(w);
@@ -76,8 +76,8 @@ function numberVis(n) {
 
 /* ---------- emoji / tile ---------- */
 const POS_GLYPH = { verb: "🏃", adj: "🎨", adv: "⏱️", pron: "👤", conj: "🔗", part: "✨", art: "📎", interj: "❗" };
-export function emojiFor(w) { return EMOJI[keyOf(w)] || SENT[w.r]?.emoji || ""; }
-export function hasPicture(w) { return !!(EMOJI[keyOf(w)] || SENT[w.r]?.emoji || DIAG[keyOf(w)] || numberValue(w)); }
+export function emojiFor(w) { return (!w.custom && EMOJI[keyOf(w)]) || w.emoji || SENT[w.r]?.emoji || ""; }
+export function hasPicture(w) { return !!(emojiFor(w) || DIAG[keyOf(w)] || numberValue(w)); }
 
 /** Visual tile. size: "" | "lg" | "xl". Nouns may later swap in a photo (see attachPhotos). */
 export function tile(w, size = "", { photo = false } = {}) {
