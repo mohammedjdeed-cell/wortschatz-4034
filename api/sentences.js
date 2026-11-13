@@ -37,6 +37,7 @@ const SCHEMAS = {
   words: list(obj({ q: str, ok: { type: "boolean" }, w: str, art: str, pos: str, e: str, ar: str, ...SENT_FIELDS })),
   topic: list(obj({ w: str, art: str, pos: str, e: str, ar: str, ...SENT_FIELDS })),
   translate: list(obj({ r: { type: "integer" }, ar: str })),
+  theme: obj({ name: str, emoji: str, desc: str, units: { type: "array", items: obj({ title: str, words: { type: "array", items: obj({ w: str, art: str, pos: str, e: str, ar: str, emoji: str, pl: str, tip: str }) } }) } }),
   categorize: list(obj({ r: { type: "integer" }, c: { type: "string", enum: ["basis", "zeit", "zahlen", "menschen", "koerper", "medizin", "gefuehle", "sprechen", "alltag", "raum", "wohnen", "essen", "arbeit", "geld", "bildung", "staat", "gesellschaft", "natur", "reisen", "technik", "eigenschaften", "abstrakt"] } })),
 };
 
@@ -59,6 +60,13 @@ const PROMPTS = {
   sentences: `${AUDIENCE}\nFor each dictionary word, return one object. r: the rank number given. ar: short Arabic meaning (max 5 words).\n${FIELD_RULES}\nWrite original sentences.`,
   words: `${AUDIENCE}\nThe learner typed their own words (possibly misspelled, inflected, with or without article, or in English/Arabic). For each input return one object:\n- q: the input exactly as given.\n- ok: false if it is not a real German word or phrase you can identify; then leave the other fields "".\n${WORD_RULES}\n${FIELD_RULES}`,
   topic: `${AUDIENCE}\nSuggest useful German words for the requested topic and level, most useful first. No duplicates, no words from the exclude list. Prefer words a doctor in a German hospital would really need when the topic is medical.\n${WORD_RULES}\n${FIELD_RULES}`,
+  theme: `${AUDIENCE}
+Build a vocabulary course for the learner's request: a short German course name (max 40 chars), one emoji, a one-line German description, and the requested number of lessons. Each lesson has a short German title (a concrete situation or sub-topic) and about 10 words that belong together in that situation, most useful first.
+If the request concerns the Fachsprachprüfung (FSP), e.g. of the Ärztekammer Nordrhein or Zahnärztekammer Nordrhein in Düsseldorf, organise lessons around the exam parts: Anamnese (doctor–patient conversation), körperliche bzw. zahnärztliche Untersuchung, Aufklärungsgespräch, Dokumentation/Arztbrief, Arzt-Arzt-Gespräch (Fallvorstellung), plus Fachbegriff ↔ Laiensprache where useful.
+No duplicates across lessons, no trivial A1 words unless the level is A1, no words from the exclude list.
+${WORD_RULES}
+- emoji: ONE fitting emoji. pl: plural with article for nouns, else "". tip: very short English usage note (max 8 words) or "".
+Keep German umlauts and ß exactly.`,
   categorize: `Assign each German dictionary word to exactly ONE situational theme, judged by its MOST COMMON meaning. Themes:
 basis = function words: articles, pronouns, prepositions, conjunctions, particles, modal/auxiliary verbs (sein, haben, werden, können).
 zeit = time, dates, frequency, calendar (Jahr, heute, oft, Montag, früh).
@@ -111,6 +119,13 @@ function buildRequest(mode, body) {
     if (!words.length) return null;
     return { text: `Inputs, one per line:\n${words.join("\n")}` };
   }
+  if (mode === "theme") {
+    const request = clip(body.request, 160).trim(); if (!request) return null;
+    const units = Math.min(5, Math.max(1, Number(body.units) || 3));
+    const level = clip(body.level, 4) || "B1";
+    const exclude = (Array.isArray(body.exclude) ? body.exclude : []).map((s) => clip(s, 40)).slice(0, 300);
+    return { text: `Request: ${request}\nLevel: ${level}\nLessons: ${units} (about 10 words each)\nExclude: ${exclude.join(", ") || "(none)"}` };
+  }
   if (mode === "topic") {
     const topic = clip(body.topic, 80).trim(); if (!topic) return null;
     const n = Math.min(30, Math.max(5, Number(body.n) || 15));
@@ -156,7 +171,9 @@ export default async function handler(req, res) {
     });
     if (msg.stop_reason === "refusal") return res.status(422).json({ error: "refused" });
     const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-    let items = JSON.parse(text).items || [];
+    const parsed = JSON.parse(text);
+    if (mode === "theme") { res.setHeader("Cache-Control", "no-store"); return res.status(200).json({ theme: parsed, model: msg.model }); }
+    let items = parsed.items || [];
     if (built.allowed) items = items.filter((o) => built.allowed.has(Number(o.r)));
     if (mode === "sentences") items = items.filter((o) => o.de);
     res.setHeader("Cache-Control", "no-store");
