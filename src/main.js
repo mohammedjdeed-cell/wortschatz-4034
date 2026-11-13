@@ -5,6 +5,7 @@ import { SENT, pending, getSentences, onAI, aiCall } from "./ai.js";
 import * as AI from "./ai.js";
 import { cloud } from "./cloud.js";
 import * as Learn from "./learn.js";
+import { startTour, tourSeen, welcomeHTML, helpHTML } from "./tour.js";
 import { esc, keyOf, wordHTML, posLabel, isNoun, tile, freqHTML, caseOf, attachPhotos, sayText, hasPicture, photosOn, setPhotos } from "./visuals.js";
 
 window.__BY = BY;
@@ -52,7 +53,7 @@ function syncLang() { document.querySelectorAll("[data-lang]").forEach((b) => b.
 
 /* ---------- shared bits ---------- */
 function sentHTML(r, { full = true } = {}) {
-  const s = SENT[r] || St.S.custom?.[r]?.s; const w = BY.get(r);
+  const w = BY.get(r); const s = SENT[r] || St.S.custom?.[r]?.s || w?.s;
   if (s && s.de) {
     const ex = [];
     if (s.pl) ex.push(`<span>Plural: <b>${esc(s.pl)}</b></span>`);
@@ -68,6 +69,7 @@ function sentHTML(r, { full = true } = {}) {
   return "";
 }
 function metaHTML(w) {
+  if (w.pack) return `<div class="meta"><span class="chip mine">${w.pack === "fsp-zahnarzt" ? "FSP Zahnarzt" : "FSP Arzt"}</span><span>${esc(posLabel(w))}</span></div>`;
   if (w.custom) return `<div class="meta"><span class="chip mine">Eigenes Wort</span><span>${esc(posLabel(w))}</span>${w.topic ? `<span>· ${esc(w.topic)}</span>` : ""}</div>`;
   const c = caseOf(w);
   return `<div class="meta"><span class="chip">#${w.r}</span><span>${esc(posLabel(w))}</span>${c ? `<span class="chip case">+ ${c}</span>` : ""}${freqHTML(w.r)}</div>`;
@@ -198,7 +200,7 @@ const idx = (w) => { let x = IDX.get(w.r); if (!x || x.src !== w) { x = { src: w
 function filtered() {
   const q = norm(dict.q.trim()); const num = /^#?\d+$/.test(q) ? Number(q.replace("#", "")) : 0;
   const qa = normAr(dict.q.trim());
-  return [...WORDS, ...customWords()].filter((w) => {
+  return [...WORDS, ...St.packWords(), ...customWords()].filter((w) => {
     if (dict.pos === "mine") { if (!w.custom) return false; }
     else if (dict.pos !== "all") {
       if (dict.pos === "noun" ? !isNoun(w.p) : dict.pos === "other" ? isNoun(w.p) || ["verb", "adj", "prep"].includes(w.p) : w.p !== dict.pos) return false;
@@ -212,7 +214,7 @@ function filtered() {
 function itemHTML(w) {
   const s = St.wordState(w.r);
   const label = { new: "neu", learn: "am Lernen", today: "heute", known: "bekannt" }[s];
-  return `<li><button class="item" data-open="${w.r}">${tile(w)}<div><div class="w">${wordHTML(w)}</div>${gloss(w, "e")}</div><span class="rank">${w.custom ? "eigen" : "#" + w.r}</span><span class="dot ${s}" title="${label}"></span></button></li>`;
+  return `<li><button class="item" data-open="${w.r}">${tile(w)}<div><div class="w">${wordHTML(w)}</div>${gloss(w, "e")}</div><span class="rank">${w.custom ? "eigen" : w.pack ? "FSP" : "#" + w.r}</span><span class="dot ${s}" title="${label}"></span></button></li>`;
 }
 function wordsHead(active) {
   return `<div class="page-head"><div><h1>${active === "mine" ? "Meine Wörter" : "Wörterbuch"}</h1><p>${active === "mine" ? "Eigene Wörter und KI-Wortlisten. Was schon im Wörterbuch steht, wird automatisch zugeordnet." : `${MAXR.toLocaleString("de-DE")} Wörter, nach Häufigkeit geordnet.`}</p></div>
@@ -408,6 +410,7 @@ function renderStand() {
     <li><div class="lab"><b>Darstellung</b></div><div class="seg">${[["system", "System"], ["light", "Hell"], ["dark", "Dunkel"]].map(([k2, l2]) => `<button data-theme="${k2}" aria-pressed="${theme === k2}">${l2}</button>`).join("")}</div></li>
     <li><div class="lab"><b>Fotos bei Nomen</b><span>Bilder von Wikipedia</span></div><div class="seg"><button data-photos="1" aria-pressed="${photosOn}">An</button><button data-photos="0" aria-pressed="${!photosOn}">Aus</button></div></li>
     <li><div class="lab"><b>Sprechtempo</b></div><div class="seg">${[[0.7, "Langsam"], [0.9, "Normal"], [1.05, "Schnell"]].map(([v, l2]) => `<button data-rate="${v}" aria-pressed="${rate === v}">${l2}</button>`).join("")}</div></li>
+    <li><div class="lab"><b>Einführung</b><span>Tour durch die App · Tour · جولة تعريفية</span></div><div class="row"><button class="btn" data-act="help">Hilfe zu dieser Seite</button><button class="btn primary" data-act="tourStart">Tour starten</button></div></li>
     <li><div class="lab"><b>Sicherung</b><span>Fortschritt als Datei speichern oder wiederherstellen</span></div><div class="row"><button class="btn" data-act="export">Exportieren</button><label class="btn">Importieren<input type="file" accept="application/json" id="importFile" hidden></label></div></li>
     <li><div class="lab"><b>Zurücksetzen</b><span>Löscht deinen gesamten Fortschritt</span></div><div class="row" id="resetBox"><button class="btn danger" data-act="reset">Alles löschen</button></div></li>
   </ul></div>`;
@@ -543,6 +546,11 @@ document.addEventListener("click", async (e) => {
   if (t.dataset.say) { e.stopPropagation(); speak(t.dataset.say); return; }
   if (t.id === "flipInner") { flip(); return; }
   if (t.dataset.open) { openWord(Number(t.dataset.open)); return; }
+  if (t.dataset.welcome) {
+    const w = t.dataset.welcome; closeSheet();
+    if (w === "skip") { try { localStorage.setItem("wz-tour", "1"); } catch {} return; }
+    St.S.lang = w; St.save(); syncLang(); render(); setTimeout(() => startTour(), 150); return;
+  }
   if (Learn.onClick(t, e)) return;
   if (t.dataset.start) {
     const r = Number(t.dataset.start); const first = !St.S.start; St.setStart(r);
@@ -586,12 +594,15 @@ document.addEventListener("click", async (e) => {
     case "forgot": { const em = document.querySelector('#authForm [name="email"]')?.value; if (!em) { openAccount("in", "Bitte zuerst deine E-Mail-Adresse eintragen."); break; } try { await cloud.resetPassword(em); toast("E-Mail zum Zurücksetzen verschickt"); } catch (x) { openAccount("in", authMsg(x)); } break; }
     case "signout": await cloud.signOut(); closeSheet(); St.replaceState(St.fresh()); lsSet(LS, St.S); toast("Abgemeldet"); render(); break;
     case "export": exportBackup(); break;
+    case "tourStart": closeSheet(); startTour(); break;
+    case "help": openSheet(helpHTML(view)); break;
     case "reset": $("resetBox").innerHTML = `<span class="small">Wirklich alles löschen?</span><button class="btn danger" data-act="resetYes">Ja, löschen</button><button class="btn ghost" data-act="resetNo">Abbrechen</button>`; break;
     case "resetYes": { const g = St.S.goal; St.replaceState(St.fresh()); St.S.goal = g; St.save(); location.hash = "heute"; render(); break; }
     case "resetNo": renderStand(); break;
   }
 });
 $("accountBtn").addEventListener("click", () => openAccount());
+$("helpBtn").addEventListener("click", () => openSheet(helpHTML(view)));
 document.addEventListener("submit", (e) => Learn.onSubmit(e));
 document.addEventListener("keydown", (e) => {
   if (Learn.onKey(e, view)) return;
@@ -613,6 +624,7 @@ async function importBackup(file) {
 /* ---------- boot ---------- */
 const local = St.migrate(lsGet(LS)); if (local) St.replaceState(local);
 St.ensureToday(); route(); renderAvatar(); setSync();
+if (!tourSeen()) setTimeout(() => openSheet(welcomeHTML()), 300);
 if (cloud.enabled) {
   cloud.init().then(() => {
     cloud.redirectResult().catch((x) => openAccount("in", authMsg(x)));

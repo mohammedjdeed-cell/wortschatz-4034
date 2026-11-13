@@ -1,9 +1,9 @@
 // Themes (learning path), practice modes (typing, quiz, der/die/das) and two-player games (Erklär's!, Wort-Duell).
 import * as St from "./state.js";
 import { BY, WORDS } from "./state.js";
-import { THEMES, THEME, BANDS, unitsOf, themeRanks, themeOf, bandOf } from "./themes.js";
+import { THEMES, THEME, BANDS, unitsOf, themeRanks, themeOf, bandOf, getTheme, PACKS, userThemes, findUnit } from "./themes.js";
 import { cloud } from "./cloud.js";
-import { SENT, getSentences } from "./ai.js";
+import { SENT, getSentences, aiCall } from "./ai.js";
 import { esc, wordHTML, tile, keyOf, isNoun, gender, posLabel, attachPhotos, sayText } from "./visuals.js";
 
 let H; // UI helpers from main.js: gloss, trW, isAr, spkBtn, speak, toast, openAccount, sentHTML, openWord
@@ -31,16 +31,17 @@ function themeProgress(id) {
 }
 function pathLabel() {
   const p = St.S.path;
-  return p?.mode === "theme" && THEME[p.theme] ? `${THEME[p.theme].emoji} ${THEME[p.theme].name}` : "Nach Häufigkeit";
+  const t = p?.mode === "theme" && getTheme(p.theme);
+  return t ? `${t.emoji} ${t.name}` : "Nach Häufigkeit";
 }
 export function pathChip() {
   return `<a class="pathchip" href="#themen" title="Lernweg ändern"><span class="muted">Lernweg:</span> ${esc(pathLabel())}</a>`;
 }
 function themeCard(t) {
-  const p = themeProgress(t.id); const inBand = themeRanks(t.id).filter((r) => bandOf(r) === levelOf()).length;
+  const p = themeProgress(t.id); const inBand = t.kind === "pack" || t.kind === "user" ? 0 : themeRanks(t.id).filter((r) => bandOf(r) === levelOf()).length;
   const active = St.S.path?.mode === "theme" && St.S.path.theme === t.id;
   return `<a class="theme${active ? " active" : ""}" href="#thema/${t.id}"><span class="temo">${t.emoji}</span><span class="tbody"><b>${esc(t.name)}</b><span class="muted small">${esc(t.desc)}</span>
-    <span class="meter"><i style="width:${(p.seen / Math.max(1, p.total)) * 100}%"></i></span><span class="tmeta">${p.seen}/${p.total} Wörter · ${inBand} auf ${levelOf()}</span></span>${active ? '<span class="badge dict">Lernweg</span>' : ""}</a>`;
+    <span class="meter"><i style="width:${(p.seen / Math.max(1, p.total)) * 100}%"></i></span><span class="tmeta">${p.seen}/${p.total} Wörter · ${t.kind === "pack" || t.kind === "user" ? `${unitsOf(t.id).length} Lektionen` : `${inBand} auf ${levelOf()}`}</span></span>${active ? '<span class="badge dict">Lernweg</span>' : ""}</a>`;
 }
 export function renderThemen() {
   const lvl = levelOf();
@@ -48,11 +49,19 @@ export function renderThemen() {
   main().innerHTML = `<div class="page-head"><div><h1>Themen</h1><p>Lerne in Lektionen à 10 Wörtern, nach Situation geordnet und von leicht nach schwer. Wörter, die zusammen vorkommen, bleiben besser hängen.</p></div></div>
   <div class="panel pad pathbox"><div><b>Woher kommen deine neuen Wörter?</b><p class="muted small" style="margin:2px 0 0">Aktuell: ${esc(pathLabel())}. Wähle ein Thema als Lernweg – oder lerne einfach nach Häufigkeit.</p></div>
     <button class="btn${St.S.path?.mode === "theme" ? "" : " primary"}" data-path="freq">Nach Häufigkeit</button></div>
+  <div class="section"><h2>Prüfungsvorbereitung <span class="muted small" style="font-weight:400">Fachsprachprüfung Düsseldorf</span></h2><div class="themes">${PACKS.map(themeCard).join("")}</div></div>
+  <div class="section"><h2>Eigene Themen mit KI</h2>
+    <div class="panel pad stack"><p class="muted small" style="margin:0">Beschreibe, was du lernen willst – die KI baut daraus ein Thema mit Lektionen. Wörter, die schon im Wörterbuch stehen, werden verknüpft.</p>
+      <textarea id="aiThemeReq" rows="2" maxlength="160" placeholder="z. B. Fach Zahnarzt Düsseldorf – Prothetik · Kardiologie-Station · Arztbrief Innere Medizin">${esc(aiTheme.request)}</textarea>
+      <div class="row end"><div class="seg" role="group" aria-label="Lektionen">${[2, 3, 4, 5].map((n) => `<button data-ain="${n}" aria-pressed="${aiTheme.units === n}">${n} Lektionen</button>`).join("")}</div><button class="btn primary" data-act="aiThemeGo">Thema erstellen</button></div>
+      <div id="aiThemeOut">${aiThemeHTML()}</div></div>
+    ${userThemes().length ? `<div class="themes" style="margin-top:10px">${userThemes().map(themeCard).join("")}</div>` : ""}</div>
   <div class="section"><h2>Empfohlen für dich <span class="muted small" style="font-weight:400">Niveau ${lvl}</span></h2><div class="themes">${rec.map((id) => themeCard(THEME[id])).join("")}</div></div>
   <div class="section"><h2>Alle Themen</h2><div class="themes">${THEMES.filter((t) => !rec.includes(t.id)).map(themeCard).join("")}</div></div>`;
 }
 export function renderThema(id) {
-  const t = THEME[id]; if (!t) { location.hash = "themen"; return; }
+  const t = getTheme(id); if (!t) { location.hash = "themen"; return; }
+  if (t.kind !== "base") return renderCourse(t);
   const units = unitsOf(id); const lvl = levelOf(); const active = St.S.path?.mode === "theme" && St.S.path.theme === id;
   const bands = BANDS.filter((b) => units.some((u) => u.band === b.id));
   main().innerHTML = `<a class="back" href="#themen">← Themen</a>
@@ -64,11 +73,18 @@ function unitRow(u) {
   const s = unitStatus(u);
   const preview = u.ranks.slice(0, 6).map((r) => { const w = BY.get(r); return isNoun(w.p) ? `<span class="g-${gender(w.p)}">${esc(keyOf(w))}</span>` : esc(keyOf(w)); }).join(", ");
   return `<li class="unit ${s.state}"><span class="unum">${s.state === "done" ? "✓" : u.n}</span>
-    <div class="ubody"><b>Lektion ${u.n}</b><span class="small muted">${preview}${u.ranks.length > 6 ? " …" : ""}</span><span class="meter"><i style="width:${(s.seen / s.total) * 100}%"></i></span></div>
+    <div class="ubody"><b>Lektion ${u.n}${u.title ? ` · ${esc(u.title)}` : ""}</b><span class="small muted">${preview}${u.ranks.length > 6 ? " …" : ""}</span><span class="meter"><i style="width:${(s.seen / s.total) * 100}%"></i></span></div>
     <span class="small muted mono">${s.seen}/${s.total}</span>
     ${s.state === "done" ? `<button class="btn" data-quiz-unit="${u.id}">Wiederholen</button>` : s.seen === s.total ? `<button class="btn" data-quiz-unit="${u.id}">Üben</button>` : `<button class="btn primary" data-unit="${u.id}">${s.seen ? "Weiterlernen" : "Lernen"}</button>`}</li>`;
 }
-const findUnit = (uid) => unitsOf(uid.split("-")[0]).find((u) => u.id === uid);
+/** Exam packs and own AI themes: lessons with titles instead of CEFR bands. */
+function renderCourse(t) {
+  const units = unitsOf(t.id); const active = St.S.path?.mode === "theme" && St.S.path.theme === t.id;
+  main().innerHTML = `<a class="back" href="#themen">← Themen</a>
+  <div class="page-head"><div><h1>${t.emoji} ${esc(t.name)}</h1><p>${themeRanks(t.id).length} Wörter in ${units.length} Lektionen · ${esc(t.desc)}</p>${t.kind === "pack" ? `<p class="small muted">Wortschatz zur Vorbereitung, nach Prüfungsteilen geordnet – keine offizielle Liste der Kammer.</p>` : t.request ? `<p class="small muted">Anfrage: „${esc(t.request)}“</p>` : ""}</div>
+    <div class="row">${active ? `<span class="badge dict">Dein Lernweg</span>` : `<button class="btn" data-path="theme" data-theme-id="${t.id}">Als Lernweg wählen</button>`}<button class="btn primary" data-quiz-theme="${t.id}">Quiz</button>${t.kind === "user" ? `<button class="btn ghost danger" data-act="aiThemeDel" data-theme-id="${t.id}">Löschen</button>` : ""}</div></div>
+  <ul class="units">${units.map((u) => unitRow(u)).join("")}</ul>`;
+}
 
 /* ================= PRACTICE HUB ================= */
 export function renderUeben() {
@@ -219,7 +235,7 @@ function renderArtikelEnd() {
 let ex = { phase: "setup", teams: [{ name: "Team A", score: 0 }, { name: "Team B", score: 0 }], cur: 0, round: 1, rounds: 3, secs: 60, src: "level", deck: [], i: 0, left: 0, log: [] };
 function exPool() {
   if (ex.src === "learned") { const p = learnedPool(); if (p.length >= 15) return p; }
-  if (THEME[ex.src]) return themeRanks(ex.src);
+  if (getTheme(ex.src)) return themeRanks(ex.src);
   return levelPool();
 }
 export function renderErklaer() {
@@ -229,7 +245,7 @@ export function renderErklaer() {
       <div class="panel settings-box">
         <label class="field">Team 1<input class="input" data-team="0" value="${esc(ex.teams[0].name)}" maxlength="20"></label>
         <label class="field">Team 2<input class="input" data-team="1" value="${esc(ex.teams[1].name)}" maxlength="20"></label>
-        <div class="field">Wörter<select id="exSrc" class="input"><option value="level" ${ex.src === "level" ? "selected" : ""}>Mein Niveau (${levelOf()})</option><option value="learned" ${ex.src === "learned" ? "selected" : ""}>Meine gelernten Wörter</option>${THEMES.map((t) => `<option value="${t.id}" ${ex.src === t.id ? "selected" : ""}>${t.emoji} ${esc(t.name)}</option>`).join("")}</select></div>
+        <div class="field">Wörter<select id="exSrc" class="input"><option value="level" ${ex.src === "level" ? "selected" : ""}>Mein Niveau (${levelOf()})</option><option value="learned" ${ex.src === "learned" ? "selected" : ""}>Meine gelernten Wörter</option>${[...PACKS, ...userThemes(), ...THEMES].map((t) => `<option value="${t.id}" ${ex.src === t.id ? "selected" : ""}>${t.emoji} ${esc(t.name)}</option>`).join("")}</select></div>
         <div class="field">Zeit pro Runde<div class="seg">${[45, 60, 90].map((s) => `<button data-exsecs="${s}" aria-pressed="${ex.secs === s}">${s} s</button>`).join("")}</div></div>
         <div class="field">Runden pro Team<div class="seg">${[2, 3, 5].map((s) => `<button data-exrounds="${s}" aria-pressed="${ex.rounds === s}">${s}</button>`).join("")}</div></div>
       </div><button class="btn primary block big" data-act="exStart">Spiel starten</button></div>`;
@@ -276,7 +292,7 @@ export function renderDuell(code) {
   code = (code || "").toUpperCase();
   if (!code) {
     main().innerHTML = `<div class="deck"><div class="page-head"><div><h1>Wort-Duell</h1><p>Beide bekommen dieselben 10 Fragen. Ihr könnt gleichzeitig oder nacheinander spielen – wer mehr richtig hat, gewinnt.</p></div></div>
-      <div class="panel pad stack"><h2>Neues Duell</h2><div class="field">Wörter<select id="duelSrc" class="input"><option value="level">Mein Niveau (${levelOf()})</option><option value="learned">Meine gelernten Wörter</option>${THEMES.map((t) => `<option value="${t.id}" ${duel.setupSrc === t.id ? "selected" : ""}>${t.emoji} ${esc(t.name)}</option>`).join("")}</select></div>
+      <div class="panel pad stack"><h2>Neues Duell</h2><div class="field">Wörter<select id="duelSrc" class="input"><option value="level">Mein Niveau (${levelOf()})</option><option value="learned">Meine gelernten Wörter</option>${[...PACKS, ...THEMES].map((t) => `<option value="${t.id}" ${duel.setupSrc === t.id ? "selected" : ""}>${t.emoji} ${esc(t.name)}</option>`).join("")}</select></div>
         <button class="btn primary block" data-act="duelCreate">Duell erstellen</button></div>
       <div class="panel pad stack" style="margin-top:12px"><h2>Einem Duell beitreten</h2><form id="joinForm" class="row"><input id="joinCode" class="input mono" style="flex:1;text-transform:uppercase" maxlength="6" placeholder="CODE" autocomplete="off"><button class="btn primary" type="submit">Beitreten</button></form></div></div>`;
     return;
@@ -316,24 +332,69 @@ function drawDuel() {
 }
 async function duelCreate() {
   const src = $("duelSrc")?.value || "level"; duel.setupSrc = src;
-  let pool = src === "learned" ? learnedPool().filter((r) => r <= 4034) : THEME[src] ? themeRanks(src) : levelPool();
+  let pool = src === "learned" ? learnedPool().filter((r) => r <= 4034 || r >= 200001) : getTheme(src) ? themeRanks(src) : levelPool();
   if (pool.length < 10) pool = levelPool();
   const code = newCode(); const qs = makeQuestions(pool, 10);
-  try { await cloud.createDuel(code, { hostName: myName(), guest: "", guestName: "", state: "waiting", qs, pA: [], pB: [], label: THEME[src]?.name || (src === "learned" ? "Gelernte Wörter" : `Niveau ${levelOf()}`) }); location.hash = `duell/${code}`; }
+  try { await cloud.createDuel(code, { hostName: myName(), guest: "", guestName: "", state: "waiting", qs, pA: [], pB: [], label: getTheme(src)?.name || (src === "learned" ? "Gelernte Wörter" : `Niveau ${levelOf()}`) }); location.hash = `duell/${code}`; }
   catch (e) { console.warn(e); H.toast("Duell konnte nicht erstellt werden – sind die Firestore-Regeln aktuell?"); }
+}
+
+/* ================= OWN THEMES WITH AI ================= */
+let aiTheme = { request: "", units: 3, busy: false, err: "", draft: null };
+const fold2 = (x) => x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss").trim();
+let DICTKEY = null;
+function dictMatch(w, artIn = "") {
+  if (!DICTKEY) { DICTKEY = new Map(); WORDS.forEach((x) => keyOf(x).split("/").forEach((k) => { const n = fold2(k); if (!DICTKEY.has(n)) DICTKEY.set(n, []); DICTKEY.get(n).push(x); })); }
+  const c = DICTKEY.get(fold2(w)); if (!c) return null; const a = (artIn || "").split(",")[0].trim();
+  return a ? c.find((x) => x.p.split(",")[0].trim() === a) || null : c.find((x) => !isNoun(x.p)) || null;
+}
+function aiThemeHTML() {
+  if (aiTheme.busy) return `<div class="row" style="gap:10px"><span class="spinner"></span><span class="muted">Die KI baut dein Thema … (10–30 Sekunden)</span></div>`;
+  if (aiTheme.err) return `<div class="note">${esc(aiTheme.err)}</div>`;
+  const t = aiTheme.draft; if (!t) return "";
+  return `<div class="draft"><h2>${esc(t.emoji)} ${esc(t.name)}</h2><p class="muted small" style="margin:2px 0 10px">${esc(t.desc)}</p>
+    ${t.units.map((u, i) => `<div class="draftunit"><b>Lektion ${i + 1} · ${esc(u.title)}</b><div class="small">${u.words.map((w) => { const m = dictMatch(w.w, w.art); return `<span class="dw${m ? " indict" : ""}" title="${m ? "Im Wörterbuch #" + m.r : "Neues Wort"}">${w.art ? `<span class="g-${w.art.split(",")[0].trim()}">${esc(w.art.split(",")[0].trim())}</span> ` : ""}${esc(w.w)}</span>`; }).join(", ")}</div></div>`).join("")}
+    <p class="small muted">Unterstrichen = schon im Wörterbuch, wird verknüpft.</p>
+    <div class="row end"><button class="btn ghost" data-act="aiThemeDrop">Verwerfen</button><button class="btn primary" data-act="aiThemeSave">Thema speichern</button></div></div>`;
+}
+const drawAiTheme = () => { const el = $("aiThemeOut"); if (el) el.innerHTML = aiThemeHTML(); };
+async function aiThemeGo() {
+  const req = ($("aiThemeReq")?.value || aiTheme.request).trim(); aiTheme.request = req;
+  if (req.length < 3) { H.toast("Bitte beschreibe kurz dein Thema"); return; }
+  aiTheme.busy = true; aiTheme.err = ""; aiTheme.draft = null; drawAiTheme();
+  try {
+    const res = await aiCall("theme", { request: req, units: aiTheme.units, level: levelOf(), exclude: [] });
+    const t = res && res.name ? res : null; if (!t) throw new Error("err");
+    t.units = (t.units || []).filter((u) => u.words?.length); aiTheme.draft = t;
+  } catch (e) { aiTheme.err = { auth: "Für KI-Themen bitte anmelden.", limited: "Die KI ist gerade ausgelastet – bitte gleich nochmal.", off: "Die KI ist auf diesem Server nicht eingerichtet." }[e.message] || "Das hat nicht geklappt – bitte nochmal versuchen."; }
+  aiTheme.busy = false; drawAiTheme();
+}
+function aiThemeSave() {
+  const t = aiTheme.draft; if (!t) return;
+  const own = new Map(Object.entries(St.S.custom || {}).map(([id, c]) => [fold2(c.w) + "|" + (c.art || ""), Number(id)]));
+  const units = t.units.map((u) => ({ title: u.title, ids: [...new Set(u.words.map((w) => {
+    const m = dictMatch(w.w, w.art); if (m) return m.r;
+    const k = fold2(w.w) + "|" + (w.art || ""); if (own.has(k)) return own.get(k);
+    const id = St.addCustom({ w: w.w, art: w.art, pos: w.pos, e: w.e, ar: w.ar, topic: t.name, s: null }, { learn: false });
+    St.S.custom[id].emoji = w.emoji || ""; own.set(k, id); return id;
+  }))] }));
+  const id = St.saveUserTheme({ name: t.name, emoji: t.emoji, desc: t.desc, request: aiTheme.request, units });
+  St.registerCustom(); aiTheme = { request: "", units: aiTheme.units, busy: false, err: "", draft: null };
+  location.hash = `thema/${id}`; H.toast("Thema gespeichert");
 }
 
 /* ================= events from main.js ================= */
 export function onClick(t) {
   const d = t.dataset;
-  if (d.path) { St.setPath(d.path, d.themeId || ""); H.toast(d.path === "theme" ? `Neue Wörter kommen jetzt aus „${THEME[d.themeId].name}“` : "Neue Wörter kommen nach Häufigkeit"); location.hash.startsWith("#thema") ? renderThema(d.themeId) : renderThemen(); return true; }
+  if (d.path) { St.setPath(d.path, d.themeId || ""); H.toast(d.path === "theme" ? `Neue Wörter kommen jetzt aus „${getTheme(d.themeId).name}“` : "Neue Wörter kommen nach Häufigkeit"); location.hash.startsWith("#thema") ? renderThema(d.themeId) : renderThemen(); return true; }
   if (d.unit) { const u = findUnit(d.unit); const added = St.startUnit(u.ranks); H.toast(added.length ? `${added.length} Wörter zu „Heute“ hinzugefügt` : "Alle Wörter dieser Lektion sind schon im Kasten"); getSentences(added); location.hash = "heute"; return true; }
-  if (d.quizUnit) { const u = findUnit(d.quizUnit); startQuiz(u.ranks, `${THEME[u.theme].name} · Lektion ${u.n}`); return true; }
-  if (d.quizTheme) { const seen = themeRanks(d.quizTheme).filter((r) => St.S.learn[r] || St.S.known[r]); startQuiz(seen.length >= 8 ? seen : themeRanks(d.quizTheme).slice(0, 40), THEME[d.quizTheme].name); return true; }
+  if (d.quizUnit) { const u = findUnit(d.quizUnit); startQuiz(u.ranks, `${getTheme(u.theme).name} · Lektion ${u.n}`); return true; }
+  if (d.quizTheme) { const seen = themeRanks(d.quizTheme).filter((r) => St.S.learn[r] || St.S.known[r]); startQuiz(seen.length >= 8 ? seen : themeRanks(d.quizTheme).slice(0, 40), getTheme(d.quizTheme).name); return true; }
   if (d.opt !== undefined && quiz) { answerOpt(Number(d.opt), (right) => { if (quiz.mode === "solo") renderQuiz(); else { const isHost = duel.data.host === cloud.user.uid; const key = isHost ? "pA" : "pB"; const arr = [...(duel.data[key] || []), right ? 1 : 0]; duel.data[key] = arr; drawDuel(); cloud.updateDuel(duel.code, { [key]: arr }).catch(() => H.toast("Antwort nicht gespeichert – Verbindung?")); if (arr.length === duel.data.qs.length) St.logPractice(arr.length); } }); return true; }
   if (d.missed) { d.missed.split(",").map(Number).forEach((r) => St.learnWord(r)); H.toast("In den Karteikasten gelegt"); t.disabled = true; return true; }
   if (d.ins) { const i = $("typeIn"); if (i && !i.disabled) { const p = i.selectionStart ?? i.value.length; i.value = i.value.slice(0, p) + d.ins + i.value.slice(p); i.focus(); i.setSelectionRange(p + 1, p + 1); } return true; }
   if (d.art) { answerArt(d.art); return true; }
+  if (d.ain) { aiTheme.units = Number(d.ain); document.querySelectorAll("[data-ain]").forEach((b) => b.setAttribute("aria-pressed", String(b === t))); return true; }
   if (d.exsecs) { ex.secs = Number(d.exsecs); renderErklaer(); return true; }
   if (d.exrounds) { ex.rounds = Number(d.exrounds); renderErklaer(); return true; }
   switch (d.act) {
@@ -346,6 +407,10 @@ export function onClick(t) {
     case "exRestart": ex.teams.forEach((x) => (x.score = 0)); ex.round = 1; ex.cur = 0; ex.deck = shuffle(exPool()); ex.i = 0; ex.phase = "ready"; renderErklaer(); return true;
     case "exSetup": ex.phase = "setup"; renderErklaer(); return true;
     case "duelCreate": duelCreate(); return true;
+    case "aiThemeGo": aiThemeGo(); return true;
+    case "aiThemeSave": aiThemeSave(); return true;
+    case "aiThemeDrop": aiTheme.draft = null; drawAiTheme(); return true;
+    case "aiThemeDel": if (confirm("Dieses Thema löschen? Bereits gelernte Wörter bleiben im Karteikasten.")) { St.deleteUserTheme(d.themeId); location.hash = "themen"; } return true;
     case "duelShare": { const url = `${location.origin}/#duell/${duel.code}`; const text = `Wort-Duell auf Wortschatz 4034 – mach mit! Code: ${duel.code}`; if (navigator.share) navigator.share({ title: "Wort-Duell", text, url }).catch(() => {}); else { navigator.clipboard?.writeText(`${text} ${url}`); H.toast("Link kopiert"); } return true; }
     case "duelCopy": navigator.clipboard?.writeText(duel.code).then(() => H.toast("Code kopiert")).catch(() => {}); return true;
   }
@@ -357,7 +422,8 @@ export function onSubmit(e) {
   if (e.target.id === "joinForm") { e.preventDefault(); const c = $("joinCode").value.trim().toUpperCase(); if (c.length === 6) location.hash = `duell/${c}`; else H.toast("Der Code hat 6 Zeichen"); return true; }
   return false;
 }
-export function onInput(e) { if (e.target.dataset?.team) { ex.teams[Number(e.target.dataset.team)].name = e.target.value || `Team ${Number(e.target.dataset.team) + 1}`; return true; } return false; }
+export function onInput(e) {
+  if (e.target.id === "aiThemeReq") { aiTheme.request = e.target.value; return true; } if (e.target.dataset?.team) { ex.teams[Number(e.target.dataset.team)].name = e.target.value || `Team ${Number(e.target.dataset.team) + 1}`; return true; } return false; }
 export function onKey(e, view) {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return false;
   if ((view === "quiz" || view === "duell") && /^[1-4]$/.test(e.key)) { const b = document.querySelector(`.opt[data-opt="${Number(e.key) - 1}"]`); if (b && !b.disabled) b.click(); return true; }

@@ -421,5 +421,36 @@ select.input { height: 40px; }
 .sharebox { align-items: center; text-align: center; }
 .sharebox .code { font-size: 2rem; letter-spacing: 0.2em; font-weight: 600; }
 
+.draft { border-top: 1px solid var(--line); padding-top: 12px; }
+.draftunit { padding: 8px 0; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 4px; }
+.dw.indict { text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 3px; }
+/* ---------- tour & help ---------- */
+.help-btn { font: 600 0.95rem var(--f-ui); border: 1px solid var(--line-strong); border-radius: 50%; width: 32px; height: 32px; color: var(--fg); }
+.tour { position: fixed; inset: 0; z-index: 90; }
+.tour.dim { background: rgb(0 0 0 / 0.55); }
+.tour-hole { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.55); outline: 2px solid #fff; transition: all 0.25s ease; pointer-events: none; }
+.tour-card { position: fixed; z-index: 91; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: 0 20px 50px rgb(0 0 0 / 0.3); display: flex; flex-direction: column; gap: 8px; }
+.tour-card.center { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 32px)); }
+.tour-card.sheet-mode { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); top: auto; }
+.tour-card.sheet-mode.top { top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
+.tour-card h3 { margin: 0; font-size: 1.1rem; }
+.tour-card p { margin: 0; line-height: 1.55; color: var(--muted); }
+.tour-card.ar, .help.ar dd, .help.ar h2 { font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", var(--f-ui); }
+.tour-card.ar p { font-size: 1.02rem; line-height: 1.8; }
+.tour-top { display: flex; justify-content: space-between; align-items: center; }
+.tour-top .btn { height: 28px; padding: 0 8px; font-size: 0.8rem; }
+.tour-nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.help dl { margin: 0; display: flex; flex-direction: column; }
+.help dl > div { padding: 10px 0; border-top: 1px solid var(--line); }
+.help dt { font-weight: 600; margin-bottom: 2px; }
+.help dd { margin: 0; color: var(--muted); line-height: 1.6; }
+.help.ar dd { font-size: 1.02rem; line-height: 1.8; }
+.help .btn { margin-top: 8px; }
+.welcome { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 8px 0; }
+.welcome img { border-radius: 14px; }
+.welcome h2 { padding: 0; }
+.welcome p { margin: 0; line-height: 1.7; }
+.welcome-langs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.welcome-langs .ar { font-family: "IBM Plex Sans Arabic", sans-serif; font-size: 1.05rem; }
 @media (pointer: coarse) { .kbd { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

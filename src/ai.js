@@ -1,5 +1,6 @@
 // Example sentences + visual hints. Lookup order: local cache → shared Firestore cache → Vercel AI endpoint.
 import { BY } from "./state.js";
+import * as St from "./state.js";
 import { cloud } from "./cloud.js";
 
 const LS = "wz4034-s";
@@ -15,6 +16,7 @@ const FIELDS = ["emoji", "pl", "de", "en", "kde", "ken", "tip", "syn", "ant", "k
 const clean = (o) => Object.fromEntries(FIELDS.map((k) => [k, String(o?.[k] ?? "").slice(0, k === "emoji" ? 16 : 240)]));
 
 export async function getSentences(ranks) {
+  getCustomSentences(ranks);
   const need = [...new Set(ranks)].filter((r) => r <= 4034 && BY.has(r) && !SENT[r] && !pending.has(r));
   if (!need.length) return;
   need.forEach((r) => pending.add(r)); notify();
@@ -70,5 +72,23 @@ export async function aiCall(mode, payload) {
   if (res.status === 429) throw new Error("limited");
   if (res.status === 503 || res.status === 404 || res.status === 405) throw new Error("off");
   if (!res.ok) throw new Error("err");
-  return (await res.json()).items || [];
+  const j = await res.json(); return mode === "theme" ? j.theme : j.items || [];
+}
+
+/** Own words (ids 100001–199999) get their example sentences lazily, stored in the learner's own state. */
+export async function getCustomSentences(ids) {
+  const S = St.S;
+  const need = [...new Set(ids)].filter((id) => id >= 100001 && id < 200000 && S.custom?.[id] && !S.custom[id].s && !pending.has(id)).slice(0, 25);
+  if (!need.length || aiState === "off" || aiState === "auth") return;
+  need.forEach((id) => pending.add(id)); notify();
+  try {
+    const q = need.map((id) => { const c = S.custom[id]; return (c.art ? c.art.split(",")[0].trim() + " " : "") + c.w; });
+    const items = await aiCall("words", { words: q });
+    need.forEach((id, i) => {
+      const o = items.find((x) => x.q === q[i]) || items[i];
+      if (o && o.de) { const c = S.custom[id]; c.s = Object.fromEntries(["emoji", "pl", "de", "en", "ar_s", "kde", "ken", "ar_k", "tip", "syn", "ant", "konj"].map((k) => [k, String(o[k] || "")])); if (!c.ar && o.ar) c.ar = o.ar; }
+    });
+    St.registerCustom(); St.save();
+  } catch (e) { if (e.message === "auth") aiState = "auth"; }
+  finally { need.forEach((id) => pending.delete(id)); notify(); }
 }

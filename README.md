@@ -25,6 +25,9 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
 - **Meine Wörter (own words):**
   - Type your own words (any spelling, with or without article). Each word is matched against the 4034-word dictionary first; the AI fills in the rest.
   - Or ask for a topic ("Körper", "Kardiologie", "Technik") and the AI suggests words at your level. Words already in the dictionary are linked to it rather than duplicated.
+- **Themen:** 22 situational themes with level-ordered lessons, two exam packs (**FSP Arzt** and **FSP Zahnarzt**, Düsseldorf, `src/data/packs.json`, ordered by exam part), and **own themes built by the AI** from any request (e.g. "Fach Zahnarzt – Prothetik").
+- **Üben:** flashcards, typed recall, quick quiz, der/die/das trainer; for two people: Erklär's! (one phone) and Wort-Duell (online).
+- **Tutorial:** first-visit welcome with the choice of English or Arabic, a guided spotlight tour, and a "?" help page for every screen (`src/tour.js`).
 - **Translation language:** German ↔ English or German ↔ Arabic (switch in the header). All 4034 words have an Arabic meaning (`src/data/ar.json`); new AI example sentences come with Arabic translations. The dictionary search also accepts Arabic.
 
 ---

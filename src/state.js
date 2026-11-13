@@ -1,7 +1,7 @@
 // Learning state + Leitner queue logic (ported from the original single-file app, extended with streak/history/XP).
 import RAW from "./data/words.json";
 import AR from "./data/ar.json";
-import { themeOrder } from "./themes.js";
+import { themeOrder, PACK_WORDS, setUserThemes } from "./themes.js";
 
 export const MAXR = 4034;
 export const INTERVAL = [0, 1, 2, 4, 8, 16, 32];
@@ -25,7 +25,7 @@ export const fresh = () => ({
   v: 2, start: 0, cursor: 1, goal: 10, known: {}, learn: {}, today: { date: "", ranks: [] },
   hist: {}, streak: { n: 0, last: "" }, xp: 0, updated: 0,
   lang: "en", custom: {}, nextCustom: CUSTOM_BASE,
-  path: { mode: "freq", theme: "" }, // where new daily words come from: frequency order or one theme
+  path: { mode: "freq", theme: "" }, themes: {}, // where new daily words come from: frequency order or one theme
 });
 
 export let S = fresh();
@@ -33,19 +33,23 @@ export function replaceState(next) { S = Object.assign(fresh(), next || {}); reg
 
 /* ---------- the learner's own words ---------- */
 const POSMAP = { noun: "", verb: "verb", adj: "adj", adv: "adv", prep: "prep", conj: "conj", pron: "pron", num: "num", part: "part", interj: "interj", phrase: "phrase" };
-function customToWord(id, c) {
+function customToWord(id, c, extra = { custom: true }) {
   const p = c.art ? c.art : POSMAP[c.pos] ?? "phrase";
-  return { r: Number(id), w: c.w, p: p || "phrase", e: c.e || "", ar: c.ar || "", emoji: c.s?.emoji || "", custom: true, topic: c.topic || "" };
+  return { r: Number(id), w: c.w, p: p || "phrase", e: c.e || "", ar: c.ar || "", emoji: c.s?.emoji || c.emoji || "", s: c.s || null, topic: c.topic || "", ...extra };
 }
+// exam-pack words (FSP) are part of the app, not of the learner's state
+PACK_WORDS.forEach((c, id) => BY.set(id, customToWord(id, c, { pack: c.pack })));
+export const packWords = () => [...PACK_WORDS.keys()].map((id) => BY.get(id));
 export function registerCustom() {
-  for (const r of [...BY.keys()]) if (r >= CUSTOM_BASE) BY.delete(r);
+  for (const r of [...BY.keys()]) if (r >= CUSTOM_BASE && !PACK_WORDS.has(r)) BY.delete(r);
+  setUserThemes(S.themes);
   Object.entries(S.custom || {}).forEach(([id, c]) => BY.set(Number(id), customToWord(id, c)));
 }
 export const customWords = () => [...BY.values()].filter((w) => w.custom).sort((a, b) => (S.custom[b.r]?.added || 0) - (S.custom[a.r]?.added || 0));
-export function addCustom(c) {
+export function addCustom(c, { learn = true } = {}) {
   const id = S.nextCustom || CUSTOM_BASE; S.nextCustom = id + 1;
   S.custom[id] = { w: c.w, art: c.art || "", pos: c.pos || "", e: c.e || "", ar: c.ar || "", topic: c.topic || "", s: c.s || null, added: Date.now() };
-  BY.set(id, customToWord(id, S.custom[id])); addLearn([id]);
+  BY.set(id, customToWord(id, S.custom[id])); if (learn) addLearn([id]);
   return id;
 }
 export function removeCustom(id) { delete S.custom[id]; delete S.learn[id]; delete S.known[id]; BY.delete(Number(id)); save(); }
@@ -148,4 +152,20 @@ export function migrate(x) {
   if (x.v === 1) return Object.assign(fresh(), x, { v: 2 });
   if (x.v === 2) return Object.assign(fresh(), x);
   return null;
+}
+
+/* ---------- own AI themes ---------- */
+export function saveUserTheme(t) {
+  const id = "u" + Date.now().toString(36);
+  S.themes[id] = { name: t.name, emoji: t.emoji, desc: t.desc, request: t.request, created: Date.now(), units: t.units };
+  setUserThemes(S.themes); save(); return id;
+}
+export function deleteUserTheme(id) {
+  const t = S.themes[id]; if (!t) return;
+  delete S.themes[id];
+  // drop own words that only existed for this theme and were never studied
+  const still = new Set(Object.values(S.themes).flatMap((x) => x.units.flatMap((u) => u.ids)));
+  t.units.flatMap((u) => u.ids).forEach((r) => { if (r >= CUSTOM_BASE && S.custom[r] && !S.learn[r] && !S.known[r] && !still.has(r)) { delete S.custom[r]; BY.delete(r); } });
+  if (S.path?.theme === id) S.path = { mode: "freq", theme: "" };
+  setUserThemes(S.themes); save();
 }
