@@ -26,7 +26,7 @@ service cloud.firestore {
     match /sentences/{rank} {
       allow read: if true;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['emoji', 'pl', 'de', 'en', 'kde', 'ken', 'tip', 'syn', 'ant', 'konj', 'by'])
+        && request.resource.data.keys().hasOnly(['emoji', 'pl', 'de', 'en', 'kde', 'ken', 'tip', 'syn', 'ant', 'konj', 'ar', 'ar_s', 'ar_k', 'by'])
         && shortStr(request.resource.data.de, 240)
         && shortStr(request.resource.data.en, 240)
         && shortStr(request.resource.data.emoji, 16)
