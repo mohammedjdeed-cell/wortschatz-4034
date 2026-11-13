@@ -12,8 +12,8 @@ export default defineConfig({
         short_name: "Wortschatz",
         description: "10 German words a day from the frequency dictionary.",
         lang: "de",
-        theme_color: "#5b4bff",
-        background_color: "#0e0d16",
+        theme_color: "#18181b",
+        background_color: "#f7f7f5",
         display: "standalone",
         start_url: "/",
         icons: [

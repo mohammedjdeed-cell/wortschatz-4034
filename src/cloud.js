@@ -1,7 +1,9 @@
 // Firebase (Auth + Firestore) wrapper. Loaded lazily; the app works fully offline/local without it.
 const cfg = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  // Serve the sign-in handler from the app's own domain (Vercel proxies /__/auth/* to Firebase).
+  // A different auth domain breaks Google sign-in in browsers that partition third-party storage.
+  authDomain: typeof location !== "undefined" && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.host : import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
@@ -35,7 +37,14 @@ export const cloud = {
   async init() { await load(); },
   onUser(fn) { userListeners.add(fn); if (F) fn(user); },
 
-  async signInGoogle() { const { auth, fa } = await load(); const p = new fa.GoogleAuthProvider(); try { await fa.signInWithPopup(auth, p); } catch (e) { if (e?.code === "auth/popup-blocked" || e?.code === "auth/operation-not-supported-in-this-environment") await fa.signInWithRedirect(auth, p); else throw e; } },
+  async signInGoogle() {
+    const { auth, fa } = F || (await load()); const p = new fa.GoogleAuthProvider(); p.setCustomParameters({ prompt: "select_account" });
+    const mobile = matchMedia("(pointer: coarse)").matches || navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+    if (mobile) return fa.signInWithRedirect(auth, p);
+    try { await fa.signInWithPopup(auth, p); }
+    catch (e) { if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/internal-error"].includes(e?.code)) await fa.signInWithRedirect(auth, p); else throw e; }
+  },
+  async redirectResult() { const { auth, fa } = F || (await load()); return fa.getRedirectResult(auth); },
   async signInEmail(email, pw) { const { auth, fa } = await load(); await fa.signInWithEmailAndPassword(auth, email, pw); },
   async signUpEmail(name, email, pw) { const { auth, fa } = await load(); const c = await fa.createUserWithEmailAndPassword(auth, email, pw); if (name) await fa.updateProfile(c.user, { displayName: name }); },
   async resetPassword(email) { const { auth, fa } = await load(); await fa.sendPasswordResetEmail(auth, email); },

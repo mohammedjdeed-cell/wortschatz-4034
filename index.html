@@ -5,38 +5,37 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Wortschatz 4034</title>
   <meta name="description" content="Jeden Tag 10 Wörter aus dem Häufigkeitswörterbuch – 10 German words a day, most common first." />
-  <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#0e0d16" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)" />
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400&display=swap" />
   <script>
     try { const t = localStorage.getItem("wz-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
 </head>
 <body>
-  <div class="mesh" aria-hidden="true"></div>
-  <div class="shell">
-    <header class="topbar">
-      <a class="brand" href="#heute" aria-label="Wortschatz 4034">
-        <img src="/icons/icon.svg" alt="" width="34" height="34" />
-        <span><b>Wortschatz</b><i class="mono">4034</i></span>
+  <header class="appbar">
+    <div class="appbar-inner">
+      <a class="brand" href="#heute" aria-label="Wortschatz 4034, Startseite">
+        <img src="/icons/icon.svg" alt="" width="28" height="28" />
+        <span>Wortschatz <span class="mono">4034</span></span>
       </a>
-      <div class="topbar-actions">
+      <nav class="tabs" id="dock" aria-label="Navigation">
+        <a href="#heute" data-v="heute"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>Heute</span></a>
+        <a href="#karten" data-v="karten"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="14" height="13" rx="2"/><path d="M7 4h11a3 3 0 0 1 3 3v10"/></svg><span>Karten</span><em id="dueBadge" hidden></em></a>
+        <a href="#woerter" data-v="woerter"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg><span>Wörter</span></a>
+        <a href="#stand" data-v="stand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg><span>Fortschritt</span></a>
+      </nav>
+      <div class="appbar-actions">
         <span class="sync" id="sync" hidden></span>
-        <button class="avatar" id="accountBtn" aria-label="Konto · account"></button>
+        <button class="avatar" id="accountBtn" aria-label="Konto"></button>
       </div>
-    </header>
-    <nav class="dock" id="dock" aria-label="Navigation">
-      <a href="#heute" data-v="heute"><svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg><span>Heute</span></a>
-      <a href="#karten" data-v="karten"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="14" rx="3"/><path d="M7 3h11a3 3 0 0 1 3 3v11"/></svg><span>Karten</span><em id="dueBadge" hidden></em></a>
-      <a href="#woerter" data-v="woerter"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg><span>Wörter</span></a>
-      <a href="#stand" data-v="stand"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Fortschritt</span></a>
-    </nav>
-    <main id="main" tabindex="-1"></main>
-  </div>
+    </div>
+  </header>
+  <main id="main" class="page" tabindex="-1"></main>
   <dialog id="sheet" class="sheet"><div class="sheet-body" id="sheetBody"></div></dialog>
   <div class="toast" id="toast" role="status" hidden></div>
   <div class="tip" id="tip" role="tooltip" hidden></div>

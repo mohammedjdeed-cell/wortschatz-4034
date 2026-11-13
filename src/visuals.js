@@ -58,7 +58,7 @@ const DIAG = {
 export function prepDiagram(w) {
   const d = DIAG[keyOf(w)]; if (!d) return "";
   return `<svg class="diagram" viewBox="0 0 100 100" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--vc)"/></marker></defs>
-  <style>.bx{fill:color-mix(in oklch,var(--vc) 14%,transparent);stroke:var(--vc);stroke-width:2.5;stroke-linejoin:round}.bx2{fill:none;stroke:var(--vc);stroke-width:2;opacity:.6;stroke-linejoin:round}.bl{fill:var(--accent-2);stroke:var(--surface-solid);stroke-width:2}.ar{stroke:var(--vc);stroke-width:2.5;fill:none;stroke-linecap:round}</style>${d}</svg>`;
+  <style>.bx{fill:color-mix(in oklch,var(--vc) 14%,transparent);stroke:var(--vc);stroke-width:2.5;stroke-linejoin:round}.bx2{fill:none;stroke:var(--vc);stroke-width:2;opacity:.6;stroke-linejoin:round}.bl{fill:var(--fg);stroke:var(--surface);stroke-width:2}.ar{stroke:var(--vc);stroke-width:2.5;fill:none;stroke-linecap:round}</style>${d}</svg>`;
 }
 
 /* ---------- numbers ---------- */
