@@ -4,7 +4,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
+// Server-side refusal fallbacks exist for Opus/Sonnet/Fable, not for Haiku.
+const FALLBACK = /haiku/.test(MODEL) ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
 const PROJECT = process.env.FIREBASE_PROJECT_ID || "";
 const REQUIRE_AUTH = (process.env.REQUIRE_AUTH ?? (PROJECT ? "true" : "false")) === "true";
 const ALLOWED = (process.env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -103,8 +105,7 @@ export default async function handler(req, res) {
     const msg = await client.beta.messages.create({
       model: MODEL,
       max_tokens: 8000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      ...FALLBACK,
       output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
       system: INSTRUCTIONS,
       messages: [{ role: "user", content: `Words (rank | word | part of speech or article | English):\n${list}` }],

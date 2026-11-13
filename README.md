@@ -65,7 +65,7 @@ The workflow skips itself until `FIREBASE_PROJECT_ID` is set.
    | `FIREBASE_PROJECT_ID` | your Firebase project id. The function only accepts signed-in users, by verifying their Firebase ID token |
    | `VITE_FIREBASE_*` | the same six values as in `.env.local` |
    | `ALLOWED_ORIGINS` *(optional)* | `https://<id>.web.app,https://<id>.firebaseapp.com,https://<app>.vercel.app` |
-   | `ANTHROPIC_MODEL` *(optional)* | defaults to `claude-opus-5-5`. Set `claude-haiku-5-5` for lower cost |
+   | `ANTHROPIC_MODEL` *(optional)* | defaults to `claude-haiku-5-5` (about $0.50 for the whole dictionary). Set `claude-opus-5-5` for the highest quality (about $13) |
 
 3. Redeploy. Every push to `main` now deploys to production, and every branch or PR gets a preview URL.
 4. For the Firebase-hosted build, set `VITE_API_BASE=https://<app>.vercel.app` so that build calls the Vercel AI endpoint.
