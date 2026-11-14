@@ -1,7 +1,8 @@
-// Learning state + Leitner queue logic (ported from the original single-file app, extended with streak/history/XP).
+// Learning state + spaced repetition (FSRS; ported from the original single-file Leitner app, extended with streak/history/XP).
 import RAW from "./data/words.json";
 import AR from "./data/ar.json";
 import { themeOrder, PACK_WORDS, setUserThemes } from "./themes.js";
+import { fsrs, generatorParameters, createEmptyCard, Rating, State } from "ts-fsrs";
 
 export const MAXR = 4034;
 export const INTERVAL = [0, 1, 2, 4, 8, 16, 32];
@@ -112,11 +113,44 @@ export function dueDeck() {
   return Object.keys(S.learn).map(Number).filter((r) => S.learn[r].due <= t)
     .sort((a, b) => (S.learn[a].lap || 0) - (S.learn[b].lap || 0) || S.learn[a].b - S.learn[b].b || a - b);
 }
-export function answer(r, good) {
-  const L = S.learn[r]; if (!L) return;
-  if (good) { L.b = Math.min(L.b + 1, 6); L.due = addDays(today(), INTERVAL[L.b]); } else { L.b = 0; L.due = today(); }
+/* ---------- spaced repetition: FSRS (target retention 90 %) ----------
+   Each card in S.learn keeps its FSRS memory state in L.f = { s: stability, d: difficulty, st: state, n: reps, l: lapses, t: last review ms, due: ms }.
+   L.due stays a local date string (what dueDeck compares) and L.b a box 0–6 derived from stability, so the box chart and lesson status keep working. */
+export const GRADES = [[1, "Nochmal"], [2, "Schwer"], [3, "Gut"], [4, "Leicht"]];
+const F = fsrs(generatorParameters({ request_retention: 0.9, enable_fuzz: true, maximum_interval: 3650 }));
+const DAY = 86400000;
+const boxOf = (stab) => { let b = 0; while (b < 6 && stab >= INTERVAL[b + 1]) b++; return b; };
+/** FSRS card from a stored entry; old Leitner boxes become a review card whose stability equals the box interval. */
+function cardOf(L, now) {
+  if (L.f) return { ...createEmptyCard(now), stability: L.f.s, difficulty: L.f.d, state: L.f.st, reps: L.f.n, lapses: L.f.l, last_review: L.f.t ? new Date(L.f.t) : undefined, due: new Date(L.f.due), learning_steps: L.f.ls || 0 };
+  if (!L.b) return createEmptyCard(now);
+  const iv = INTERVAL[Math.min(L.b, 6)]; const [y, m, d] = (L.due || today()).split("-").map(Number); const due = new Date(y, m - 1, d, 4);
+  return { ...createEmptyCard(now), state: State.Review, stability: iv, difficulty: 5, reps: L.b, last_review: new Date(due.getTime() - iv * DAY), due, scheduled_days: iv };
+}
+const gradeOf = (g) => (g === true ? Rating.Good : g === false ? Rating.Again : Math.min(4, Math.max(1, Number(g) || 1)));
+function store(L, c) {
+  L.f = { s: +c.stability.toFixed(3), d: +c.difficulty.toFixed(3), st: c.state, n: c.reps, l: c.lapses, t: c.last_review ? c.last_review.getTime() : Date.now(), due: c.due.getTime(), ls: c.learning_steps || 0 };
+  L.due = fmt(c.due); L.b = c.state === State.Review ? boxOf(c.stability) : 0;
+}
+/** What each grade would do now: { 1: {days, label}, … } for the buttons. */
+export function preview(r) {
+  const L = S.learn[r]; if (!L) return {}; const now = new Date(); const rec = F.repeat(cardOf(L, now), now); const out = {};
+  for (const [g] of GRADES) { const due = rec[g].card.due; const days = Math.round((due - now) / DAY); const mins = Math.round((due - now) / 60000);
+    out[g] = { days, label: days >= 1 ? (days >= 60 ? `${Math.round(days / 30)} Mon.` : `${days} ${days === 1 ? "Tag" : "Tage"}`) : mins < 60 ? `${Math.max(1, mins)} Min.` : "heute" }; }
+  return out;
+}
+/** Grade a card: true/false (Gut/Nochmal) or 1–4 (Nochmal/Schwer/Gut/Leicht). */
+export function answer(r, grade) {
+  const L = S.learn[r]; if (!L) return; const g = gradeOf(grade); const now = new Date();
+  store(L, F.next(cardOf(L, now), now, g).card);
   L.lap = Date.now();
-  bump(good ? 2 : 1); save();
+  bump(g >= Rating.Good ? 2 : 1); save();
+}
+/** Memory details for the word sheet and card back. */
+export function memory(r) {
+  const L = S.learn[r]; if (!L?.f) return null;
+  const now = new Date(); let R = 1; try { R = F.retrievability(cardOf(L, now), now); } catch {}
+  return { stability: L.f.s, difficulty: L.f.d, reps: L.f.n, lapses: L.f.l, recall: Math.round(Math.min(1, R) * 100) };
 }
 /** Quiz results per word: after two right answers the quizzes ask the word as typed recall. */
 export function quizMark(r, ok) { const L = S.learn[r]; if (!L) return; L.qc = ok ? Math.min((L.qc || 0) + 1, 9) : Math.max(0, (L.qc || 0) - 1); }

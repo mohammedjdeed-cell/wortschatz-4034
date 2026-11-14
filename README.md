@@ -1,6 +1,6 @@
 # Wortschatz 4034
 
-Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirner), most common first. It is a Leitner-box flashcard trainer with multiple accounts, cloud sync, pictures for each word, and AI example sentences (one everyday sentence and one clinical sentence). It is built for Fachsprachprüfung preparation.
+Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirner), most common first. It is a spaced-repetition flashcard trainer (FSRS) with multiple accounts, cloud sync, pictures for each word, and AI example sentences (one everyday sentence and one clinical sentence). It is built for Fachsprachprüfung preparation.
 
 | Layer | Tech | Role |
 |---|---|---|
@@ -11,9 +11,9 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
 
 ## Features
 - **Heute (Today):** your daily words, each with a visual tile. Tick a word you already know and a new one takes its place.
-- **Karten (Flashcards):** 3D flip cards in three modes: DE → EN, EN → DE, and **Bild → DE** (picture to German). Swipe left or right, or use Space / ← / →. Leitner boxes 1–7 with review intervals of 0/1/2/4/8/16/32 days.
+- **Karten (Flashcards):** 3D flip cards in three modes: DE → EN, EN → DE, and **Bild → DE** (picture to German). Rate each card **Nochmal / Schwer / Gut / Leicht** (keys 1–4, ← / →, or swipe); each button shows when the card comes back. Scheduling is **FSRS** (`ts-fsrs`, target retention 90 %, fuzz on): every word has its own stability and difficulty. Existing Leitner boxes were migrated on first review (stability = old box interval). Learning steps (1–10 min) keep a card in today's deck; due dates are day-based.
 - **Wörter (Dictionary):** search all 4034 words in German or English, or by `#rank`. Filter by part of speech and learning status. Each word opens in a detail sheet.
-- **Fortschritt (Progress):** a 4034-cell dictionary map, Leitner box chart, activity heatmap, streak, XP, an opt-in leaderboard (editable display name, top 20 plus your own rank), settings, and JSON backup/restore.
+- **Fortschritt (Progress):** a 4034-cell dictionary map, memory chart (cards by FSRS stability), activity heatmap, streak, XP, an opt-in leaderboard (editable display name, top 20 plus your own rank), settings, and JSON backup/restore.
 - **Visuals:**
   - About 980 hand-picked emoji, plus AI emoji for the remaining words.
   - Wikipedia photos for nouns.
@@ -95,12 +95,12 @@ npx vite build --mode test --outDir /tmp/dist-test
 npx vite preview --port 4173 --outDir /tmp/dist-test &
 node tests/smoke.mjs
 ```
-`node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
+`node tests/fsrs.mjs` checks the scheduling without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
 
 ## Data model (Firestore)
 | Path | Who | Content |
 |---|---|---|
-| `users/{uid}` | owner only | full learning state (Leitner boxes, known words, daily queue, history, streak, XP) |
+| `users/{uid}` | owner only | full learning state (FSRS memory per card `learn[r].f`, known words, daily queue, history, streak, XP) |
 | `profiles/{uid}` | read: owner, or signed-in users when `visible`; write: owner | leaderboard card, **only while the learner opted in** (Fortschritt → Rangliste → "Auf der Rangliste zeigen"): display name, photo, known/learning counts, streak, XP, `visible: true`. Switching off deletes it |
 | `sentences/{rank}` | read: anyone; create-once: signed-in users | AI example sentences + visual hints |
 

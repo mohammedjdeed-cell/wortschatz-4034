@@ -134,10 +134,20 @@ function cardFront(w, mode) {
   if (mode === "bild") return `${tile(w, "xl", { photo: true })}<div class="lbl">Was ist das?</div><div class="meta" style="justify-content:center"><span>${esc(posLabel(w))}</span></div>`;
   return `<div class="meta" style="justify-content:center"><span class="chip">#${w.r}</span><span>${esc(posLabel(w))}</span></div><div class="word">${wordHTML(w)}</div>${spkBtn(sayText(w))}`;
 }
+/** FSRS memory state in words: stability (days until recall drops to 90 %) and recall chance now. */
+function memLabel(r) {
+  const m = St.memory(r); if (!m) return "Neue Karte";
+  const s = m.stability < 1 ? "unter 1 Tag" : `${Math.round(m.stability)} ${Math.round(m.stability) === 1 ? "Tag" : "Tage"}`;
+  return `Gedächtnis hält ~${s} · jetzt ${m.recall} % sicher${m.lapses ? ` · ${m.lapses}× vergessen` : ""}`;
+}
+function gradesHTML(r) {
+  const p = St.preview(r);
+  return St.GRADES.map(([g, l]) => `<button class="btn${g === 3 ? " primary" : ""}" data-grade="${g}"><span>${l}</span><small class="mono">${p[g]?.label || ""}</small><span class="kbd">${g}</span></button>`).join("");
+}
 function cardBack(w, L) {
   return `<div class="wtitle" style="gap:12px;align-items:center">${tile(w, "", { photo: true })}<div style="flex:1;min-width:0"><div class="word">${wordHTML(w)}</div><div>${gloss(w)}</div></div>${spkBtn(sayText(w))}</div>
     ${metaHTML(w)}${sentHTML(w.r)}
-    <div class="lbl" style="margin-top:auto">Fach ${L.b + 1} von 7 · „Gewusst“ → wieder in ${INTERVAL[Math.min(L.b + 1, 6)]} ${INTERVAL[Math.min(L.b + 1, 6)] === 1 ? "Tag" : "Tagen"}</div>`;
+    <div class="lbl" style="margin-top:auto">${memLabel(w.r)}</div>`;
 }
 function renderKarten() {
   if (!St.S.start) {
@@ -156,13 +166,13 @@ function renderKarten() {
     <div class="deckbar"><span><b class="mono" style="color:var(--fg)">${deck.length}</b> fällig · ${total} im Kasten</span>
       <div class="seg" role="group" aria-label="Abfragerichtung">${[["de", `DE → ${isAr() ? "AR" : "EN"}`], ["en", `${isAr() ? "AR" : "EN"} → DE`], ["bild", "Bild → DE"]].map(([k, l]) => `<button data-dir="${k}" aria-pressed="${dir === k}">${l}</button>`).join("")}</div></div>
     <div class="flip${flipped ? " flipped" : ""}" id="flip">
-      <span class="swipe-label l">Nochmal</span><span class="swipe-label r">Gewusst</span>
+      <span class="swipe-label l">Nochmal</span><span class="swipe-label r">Gut</span>
       <div class="flip-inner" id="flipInner" role="button" tabindex="0" aria-label="Karte umdrehen">
         <div class="face front">${cardFront(w, mode)}<div class="hint"><span class="hint-key">Antwort zeigen: klicken oder <span class="kbd">Leertaste</span></span><span class="hint-touch">Antippen, um die Antwort zu sehen</span></div></div>
         <div class="face back">${cardBack(w, L)}</div>
       </div>
     </div>
-    <div class="answer" id="answerRow" ${flipped ? "" : "hidden"}><button class="btn" data-act="again">Nochmal <span class="kbd">←</span></button><button class="btn primary" data-act="good">Gewusst <span class="kbd">→</span></button></div>
+    <div class="answer grades" id="answerRow" ${flipped ? "" : "hidden"}>${gradesHTML(r)}</div>
     <div class="row" style="justify-content:center" ${flipped ? "" : "hidden"} id="retireRow"><button class="btn ghost" data-act="retire">Kenne ich sicher – aus dem Kasten nehmen</button></div>
   </div>`;
   attachPhotos(main);
@@ -175,9 +185,9 @@ function flip() {
   getSentences(St.dueDeck().slice(0, 8));
   if (navigator.vibrate) navigator.vibrate(8);
 }
-function doAnswer(good) {
+function doAnswer(grade) {
   const r = St.dueDeck()[0]; if (!r) return;
-  St.answer(r, good); flipped = false; if (navigator.vibrate) navigator.vibrate(good ? [10, 30, 10] : 25);
+  St.answer(r, grade); flipped = false; if (navigator.vibrate) navigator.vibrate(grade >= 3 ? [10, 30, 10] : 25);
   renderKarten(); getSentences(St.dueDeck().slice(0, 6));
 }
 function bindSwipe() {
@@ -191,7 +201,7 @@ function bindSwipe() {
   });
   const end = () => {
     if (x0 === null) return; inner.style.transition = ""; inner.style.transform = ""; L.style.opacity = R.style.opacity = 0;
-    const d = dx; x0 = null; dx = 0; if (Math.abs(d) > 90) doAnswer(d > 0);
+    const d = dx; x0 = null; dx = 0; if (Math.abs(d) > 90) doAnswer(d > 0 ? 3 : 1);
   };
   el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
 }
@@ -346,7 +356,7 @@ function mineAdd() {
 
 function openWord(r) {
   const w = BY.get(r); const s = St.wordState(r); const L = St.S.learn[r];
-  const status = s === "known" ? "Bekannt" : L ? `Im Karteikasten · Fach ${L.b + 1} · fällig ${new Date(L.due).toLocaleDateString("de-DE")}` : "Noch nicht gelernt";
+  const status = s === "known" ? "Bekannt" : L ? `Im Karteikasten · fällig ${new Date(L.due).toLocaleDateString("de-DE")} · ${memLabel(r)}` : "Noch nicht gelernt";
   openSheet(`${tile(w, "lg", { photo: true })}
     <div><div class="word" style="font-size:1.8rem">${wordHTML(w)}</div><div style="font-size:1.05rem">${gloss(w)}</div>${isAr() && w.ar ? `<div class="en">${esc(w.e)}</div>` : ""}${metaHTML(w)}</div>
     <div class="row">${spkBtn(sayText(w))}<span class="muted small">${status}</span></div>
@@ -401,8 +411,8 @@ function renderStand() {
     <div class="panel pad"><div class="panel-head"><h2>Wörterbuch-Karte</h2><div class="legend"><span><i style="background:var(--g4)"></i>Bekannt</span><span><i style="background:var(--learn)"></i>Am Lernen</span><span><i style="background:var(--g0);box-shadow:inset 0 0 0 1px var(--line-strong)"></i>Neu</span></div></div>
       <div id="mapHost"></div><p class="muted small" style="margin:8px 0 0">Ein Kästchen pro Wort, Rang 1 oben links. Antippen öffnet das Wort.</p></div>
     <div style="display:flex;flex-direction:column;gap:16px">
-      <div class="panel pad"><div class="panel-head"><h2>Karteikasten</h2><span class="muted small">Fach 1–7</span></div>
-        <div class="bars">${boxes.map((n, i) => `<div class="b" data-tip="Fach ${i + 1}: ${n} Karten – Wiederholung nach ${INTERVAL[i]} ${INTERVAL[i] === 1 ? "Tag" : "Tagen"}"><span class="n">${n}</span><i style="height:${Math.round((n / max) * 96)}px"></i><span>${i + 1}</span></div>`).join("")}</div></div>
+      <div class="panel pad"><div class="panel-head"><h2>Gedächtnis</h2><span class="muted small">Karten nach Stabilität (FSRS)</span></div>
+        <div class="bars">${boxes.map((n, i) => `<div class="b" data-tip="${i ? `Gedächtnis hält ${INTERVAL[i]}${i < 6 ? `–${INTERVAL[i + 1]}` : "+"} Tage` : "Neu oder gerade vergessen"}: ${n} Karten"><span class="n">${n}</span><i style="height:${Math.round((n / max) * 96)}px"></i><span>${i ? INTERVAL[i] + (i < 6 ? "" : "+") : "neu"}</span></div>`).join("")}</div></div>
       <div class="panel pad"><div class="panel-head"><h2>Aktivität</h2><span class="muted small">26 Wochen</span></div>${heatmap()}</div>
     </div>
   </div>
@@ -582,6 +592,7 @@ document.addEventListener("click", async (e) => {
   if (t.dataset.theme) { const th = t.dataset.theme; if (th === "system") { delete document.documentElement.dataset.theme; try { localStorage.removeItem("wz-theme"); } catch {} } else { document.documentElement.dataset.theme = th; try { localStorage.setItem("wz-theme", th); } catch {} } renderStand(); return; }
   if (t.dataset.photos) { setPhotos(t.dataset.photos === "1"); location.reload(); return; }
   if (t.dataset.board) { St.S.board = { ...(St.S.board || {}), visible: t.dataset.board === "1", name: St.S.board?.name || myBoardName() }; St.save(); renderStand(); toast(St.S.board.visible ? "Du bist jetzt auf der Rangliste" : "Du bist nicht mehr auf der Rangliste"); setTimeout(loadBoard, 1500); return; }
+  if (t.dataset.grade) { doAnswer(Number(t.dataset.grade)); return; }
   if (t.dataset.rate) { rate = Number(t.dataset.rate); lsSet("wz-rate", rate); speak("Guten Tag"); renderStand(); return; }
   const r = Number(t.dataset.r);
   switch (t.dataset.act) {
@@ -589,8 +600,8 @@ document.addEventListener("click", async (e) => {
     case "more2": St.moreWords(St.S.goal); location.hash = "heute"; break;
     case "practice": location.hash = "karten"; break;
     case "retry": AI.resetAI(); render(); getSentences([...St.S.today.ranks]); break;
-    case "again": doAnswer(false); break;
-    case "good": doAnswer(true); break;
+    case "again": doAnswer(1); break;
+    case "good": doAnswer(3); break;
     case "retire": { const x = St.dueDeck()[0]; St.retire(x); flipped = false; renderKarten(); toast(`„${BY.get(x).w}“ als bekannt markiert`); break; }
     case "learn": St.learnWord(r); openWord(r); toast("In den Karteikasten gelegt"); break;
     case "known": St.retire(r); openWord(r); if (view === "woerter") renderWoerter(true); break;
@@ -626,8 +637,9 @@ document.addEventListener("keydown", (e) => {
   if (Learn.onKey(e, view)) return;
   if (view !== "karten" || $("sheet").open || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;
   if ((e.key === " " || e.key === "Enter") && !flipped && $("flip")) { e.preventDefault(); flip(); }
-  else if (flipped && (e.key === "ArrowLeft" || e.key === "1")) doAnswer(false);
-  else if (flipped && (e.key === "ArrowRight" || e.key === "2")) doAnswer(true);
+  else if (flipped && e.key === "ArrowLeft") doAnswer(1);
+  else if (flipped && e.key === "ArrowRight") doAnswer(3);
+  else if (flipped && /^[1-4]$/.test(e.key)) doAnswer(Number(e.key));
 });
 
 function exportBackup() {

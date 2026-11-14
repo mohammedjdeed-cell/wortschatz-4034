@@ -96,7 +96,7 @@ export function renderUeben() {
   const card = (href, emo, title, desc, extra = "") => `<a class="mode" href="${href}"><span class="memo">${emo}</span><span class="mbody"><b>${title}</b><span class="muted small">${desc}</span></span>${extra}</a>`;
   main().innerHTML = `<div class="page-head"><div><h1>Üben</h1><p>Abwechslung hilft beim Behalten: erst wiedererkennen, dann selbst schreiben, dann im Spiel benutzen.</p></div></div>
   <div class="section" style="margin-top:0"><h2>Allein</h2><div class="modes">
-    ${card("#karten", "🗂️", "Karteikarten", "Wiederholen im richtigen Abstand (Leitner-System)", due ? `<span class="badge dict">${due} fällig</span>` : "")}
+    ${card("#karten", "🗂️", "Karteikarten", "Wiederholen im richtigen Abstand (FSRS, 90 % Behalten)", due ? `<span class="badge dict">${due} fällig</span>` : "")}
     ${card("#schreiben", "⌨️", "Schreiben", "Bedeutung sehen, deutsches Wort mit Artikel tippen", due ? `<span class="badge">${due} fällig</span>` : "")}
     ${card("#quiz", "❓", "Schnell-Quiz", "10 Fragen, 4 Antworten – mit ähnlichen Wörtern als Falle", `<span class="badge">${n} Wörter</span>`)}
     ${card("#artikel", "🎯", "der · die · das", "Artikel-Training im Sekundentakt")}
@@ -366,7 +366,7 @@ function typeResult(w, res) {
 }
 function submitTyping() {
   if (!typing) return; const w = BY.get(typing.r);
-  if (typing.result) { St.answer(typing.r, typing.result.good); typing = null; renderSchreiben(); getSentences(St.dueDeck().slice(0, 4)); return; }
+  if (typing.result) { const res = typing.result; St.answer(typing.r, !res.good ? 1 : res.typo || res.synonym ? 2 : 3); typing = null; renderSchreiben(); getSentences(St.dueDeck().slice(0, 4)); return; }
   const v = $("typeIn").value; if (!v.trim()) return; typing.input = v;
   typing.result = checkTyped(w, v); vib(typing.result.good ? 15 : [30, 40, 30]); H.speak(sayText(w)); getSentences([w.r]); renderSchreiben();
 }

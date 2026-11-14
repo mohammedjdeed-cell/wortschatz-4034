@@ -467,3 +467,7 @@ select.input { height: 40px; }
 .nextles:hover { background: var(--hover); }
 .nowrap { white-space: nowrap; }
 .qhead .qmeter { flex: 1; margin: 0 12px; } .qhead .qok { color: var(--ok); }
+.answer.grades { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.answer.grades .btn { height: auto; min-height: 52px; flex-direction: column; gap: 1px; padding: 6px 4px; line-height: 1.15; }
+.answer.grades small { font-size: 0.72rem; opacity: 0.75; }
+.answer.grades .kbd { display: none; }

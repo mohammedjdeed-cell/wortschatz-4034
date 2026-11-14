@@ -131,7 +131,7 @@ const HELP = {
     ["Quiz / Wiederholen", T("Mixed questions: meaning, listening, sentence gaps, article + plural. A word you got right twice is asked as typing.", "أسئلة متنوعة: المعنى، الاستماع، الفراغ في الجملة، الأداة والجمع. الكلمة التي أجبت عنها صحيحًا مرتين تُطلب كتابتها.")],
   ] },
   ueben: { t: T("Üben – practice", "Üben – التمرين"), items: [
-    ["Karteikarten", T("Spaced repetition: tap to flip, then ‘Gewusst’ (box up, review later) or ‘Nochmal’ (back to box 1).", "مراجعة متباعدة: اضغط لقلب البطاقة، ثم ‹Gewusst› (تنتقل لصندوق أعلى وتُراجع لاحقًا) أو ‹Nochmal› (تعود للصندوق 1).")],
+    ["Karteikarten", T("Spaced repetition (FSRS): tap to flip, then rate how well you knew it – Nochmal, Schwer, Gut or Leicht.", "مراجعة متباعدة (FSRS): اضغط لقلب البطاقة، ثم قيّم مدى معرفتك بها – Nochmal أو Schwer أو Gut أو Leicht.")],
     ["Schreiben", T("See the meaning, type the German word – nouns with article. Small typos and correct synonyms count.", "ترى المعنى وتكتب الكلمة الألمانية – والأسماء مع أداة التعريف. تُقبل الأخطاء الإملائية البسيطة والمرادفات الصحيحة.")],
     ["Schnell-Quiz", T("10 questions, 4 answers. Wrong answers come from the same theme, so guessing does not help.", "عشرة أسئلة بأربعة خيارات. الخيارات الخاطئة من الموضوع نفسه، فلا يفيد التخمين.")],
     ["der · die · das", T("20 nouns: pick the right article (keys 1-2-3 on a laptop).", "عشرون اسمًا: اختر أداة التعريف الصحيحة (المفاتيح 1-2-3 على الحاسوب).")],
@@ -141,7 +141,7 @@ const HELP = {
   karten: { t: T("Karteikarten – flashcards", "Karteikarten – البطاقات"), items: [
     ["DE → EN / EN → DE / Bild → DE", T("Direction of the question: German first, translation first, or picture first.", "اتجاه السؤال: الألمانية أولًا، أو الترجمة أولًا، أو الصورة أولًا.")],
     ["Karte / Leertaste", T("Tap the card (or press Space) to see the answer.", "اضغط على البطاقة (أو مفتاح المسافة) لرؤية الإجابة.")],
-    ["Gewusst → / Nochmal ←", T("Knew it: next box, next review in 1, 2, 4, 8, 16 or 32 days. Didn't: back to box 1. On the phone you can swipe right/left.", "عرفتها: الصندوق التالي والمراجعة بعد 1 أو 2 أو 4 أو 8 أو 16 أو 32 يومًا. لم تعرفها: العودة للصندوق 1. على الهاتف يمكنك السحب يمينًا أو يسارًا.")],
+    ["Nochmal · Schwer · Gut · Leicht", T("Rate your answer; each button shows when the card comes back. FSRS models your memory per word and schedules the review when you would recall it with 90 % probability. Keys 1–4, ← = Nochmal, → = Gut; on the phone swipe left/right.", "قيّم إجابتك؛ يُظهر كل زر موعد عودة البطاقة. يقدّر نظام FSRS ذاكرتك لكل كلمة ويحدد المراجعة عندما يكون احتمال تذكّرها 90 ٪. المفاتيح 1–4، ← = Nochmal، → = Gut؛ وعلى الهاتف اسحب يسارًا أو يمينًا.")],
     ["Kenne ich sicher", T("Removes the card from the box for good and marks the word as known.", "يزيل البطاقة من الصندوق نهائيًا ويضع الكلمة في ‹Bekannt›.")],
   ] },
   woerter: { t: T("Wörter – dictionary & own words", "Wörter – القاموس وكلماتك"), items: [
