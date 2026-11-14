@@ -28,7 +28,8 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
 - **Lektionen:** "Lernen" in a theme opens the lesson in place: the ~10 words one by one (picture, word, meaning, 🔊, sentence), then a mini-quiz in two rounds mixed with a few earlier words, then **Nächste Lektion →**. With a theme as learning path, Heute shows "Weiter mit Lektion N".
 - **Quiz types:** meaning, listening (TTS), sentence gap (cloze), article + plural, typed recall; look-alike distractors (edit distance ≤ 2 or same prefix). A word answered right twice is asked as typing from then on.
 - **Themen:** 22 situational themes with level-ordered lessons, two exam packs (**FSP Arzt** and **FSP Zahnarzt**, Düsseldorf, `src/data/packs.json`, ordered by exam part), and **own themes built by the AI** from any request (e.g. "Fach Zahnarzt – Prothetik").
-- **Üben:** flashcards, typed recall, quick quiz, der/die/das trainer; for two people: Erklär's! (one phone) and Wort-Duell (online).
+- **Sätze** (in Üben): from word to sentence. **Satzbau** (tap the words of the example sentence into order, your word highlighted), **Artikel & Kasus** (fill the article gap: der/den/dem/des …), **Eigener Satz** (write a sentence with the word; the AI corrects it and explains each mistake in EN/AR, API mode `check`), and **Satzmuster** (`src/data/patterns.json`: verb + preposition + case, Nebensätze, Passiv, Konjunktiv II, FSP Anamnese, Aufklärung, Arztbrief). Per word it tracks "sicher im Satz" (`S.used`, 2 points = can use it); the word sheet has "Satz bilden".
+- **Üben:** flashcards, typed recall, quick quiz, der/die/das trainer, Sätze; for two people: Erklär's! (one phone) and Wort-Duell (online).
 - **Tutorial:** first-visit welcome with the choice of English or Arabic, a guided spotlight tour, and a "?" help page for every screen (`src/tour.js`).
 - **Translation language:** German ↔ English or German ↔ Arabic (switch in the header). All 4034 words have an Arabic meaning (`src/data/ar.json`); new AI example sentences come with Arabic translations. The dictionary search also accepts Arabic.
 
@@ -95,7 +96,7 @@ npx vite build --mode test --outDir /tmp/dist-test
 npx vite preview --port 4173 --outDir /tmp/dist-test &
 node tests/smoke.mjs
 ```
-`node tests/fsrs.mjs` checks the scheduling without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
+`node tests/saetze.mjs` covers the Sätze modes with a mocked AI. `node tests/fsrs.mjs` checks the scheduling without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
 
 ## Data model (Firestore)
 | Path | Who | Content |

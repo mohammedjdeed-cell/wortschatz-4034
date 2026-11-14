@@ -5,6 +5,7 @@ import { SENT, pending, getSentences, onAI, aiCall } from "./ai.js";
 import * as AI from "./ai.js";
 import { cloud } from "./cloud.js";
 import * as Learn from "./learn.js";
+import * as Saetze from "./saetze.js";
 import { startTour, tourSeen, welcomeHTML, helpHTML } from "./tour.js";
 import { esc, keyOf, wordHTML, posLabel, isNoun, tile, freqHTML, caseOf, attachPhotos, sayText, hasPicture, photosOn, setPhotos } from "./visuals.js";
 
@@ -359,9 +360,9 @@ function openWord(r) {
   const status = s === "known" ? "Bekannt" : L ? `Im Karteikasten · fällig ${new Date(L.due).toLocaleDateString("de-DE")} · ${memLabel(r)}` : "Noch nicht gelernt";
   openSheet(`${tile(w, "lg", { photo: true })}
     <div><div class="word" style="font-size:1.8rem">${wordHTML(w)}</div><div style="font-size:1.05rem">${gloss(w)}</div>${isAr() && w.ar ? `<div class="en">${esc(w.e)}</div>` : ""}${metaHTML(w)}</div>
-    <div class="row">${spkBtn(sayText(w))}<span class="muted small">${status}</span></div>
+    <div class="row">${spkBtn(sayText(w))}<span class="muted small">${status}${Saetze.usedLevel(r) ? ` · im Satz: ${Saetze.canUse(r) ? "sicher ✓" : "1× richtig"}` : ""}</span></div>
     <div id="sheetSent" style="display:flex;flex-direction:column;gap:8px">${sentHTML(r)}</div>
-    <div class="row">${s === "known" ? `<button class="btn" data-act="relearn" data-r="${r}">Wieder lernen</button>` : `${!L ? `<button class="btn primary" data-act="learn" data-r="${r}">In den Karteikasten</button>` : ""}<button class="btn" data-act="known" data-r="${r}">Kenne ich</button>`}${w.custom ? `<button class="btn ghost danger" data-act="delCustom" data-r="${r}">Löschen</button>` : ""}</div>
+    <div class="row">${s === "known" ? `<button class="btn" data-act="relearn" data-r="${r}">Wieder lernen</button>` : `${!L ? `<button class="btn primary" data-act="learn" data-r="${r}">In den Karteikasten</button>` : ""}<button class="btn" data-act="known" data-r="${r}">Kenne ich</button>`}${L || s === "known" ? `<button class="btn" data-act="ownSentence" data-r="${r}">Satz bilden ✍️</button>` : ""}${w.custom ? `<button class="btn ghost danger" data-act="delCustom" data-r="${r}">Löschen</button>` : ""}</div>
     ${photosOn && isNoun(w.p) ? `<div class="credit">Fotos: Wikipedia / Wikimedia Commons</div>` : ""}`, r);
   getSentences([r]);
 }
@@ -504,14 +505,15 @@ document.addEventListener("pointerover", (e) => { const el = e.target.closest?.(
 document.addEventListener("pointerout", (e) => { if (e.target.closest?.("[data-tip]")) hideTip(); });
 
 Learn.initLearn({ gloss, trW, isAr, spkBtn, speak, toast, sentHTML, openWord });
+Saetze.initSaetze({ gloss, isAr, spkBtn, speak, toast });
 
 /* ---------- routing / render ---------- */
-const TAB_OF = { thema: "themen", lektion: "themen", karten: "ueben", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
+const TAB_OF = { thema: "themen", lektion: "themen", saetze: "ueben", karten: "ueben", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
 const VIEWS = {
   heute: () => renderHeute(), karten: () => renderKarten(), woerter: () => renderWoerter(), stand: () => renderStand(),
   themen: () => Learn.renderThemen(), thema: () => Learn.renderThema(viewArg), lektion: () => Learn.renderLektion(viewArg), ueben: () => Learn.renderUeben(),
   schreiben: () => Learn.renderSchreiben(), quiz: () => Learn.renderQuiz(), artikel: () => Learn.renderArtikel(),
-  erklaer: () => Learn.renderErklaer(), duell: () => Learn.renderDuell(viewArg),
+  erklaer: () => Learn.renderErklaer(), duell: () => Learn.renderDuell(viewArg), saetze: () => Saetze.renderSaetze(viewArg),
 };
 let viewArg = "";
 function render() {
@@ -561,7 +563,7 @@ document.addEventListener("change", (e) => {
 document.addEventListener("input", (e) => {
   if (e.target.id === "q") { dict.q = e.target.value; dict.limit = 120; renderWoerter(true); }
   if (e.target.id === "mineText") mine.text = e.target.value;
-  Learn.onInput(e);
+  Learn.onInput(e); Saetze.onInput(e);
   if (e.target.id === "mineTopic") mine.topic = e.target.value;
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "mineTopic") { e.preventDefault(); mineTopic(); } });
@@ -576,6 +578,7 @@ document.addEventListener("click", async (e) => {
     St.S.lang = w; St.save(); syncLang(); render(); setTimeout(() => startTour(), 150); return;
   }
   if (Learn.onClick(t, e)) return;
+  if (Saetze.onClick(t)) return;
   if (t.dataset.start) {
     const r = Number(t.dataset.start); const first = !St.S.start; St.setStart(r);
     if (first) { render(); getSentences([...St.S.today.ranks, ...St.peek(6)]); } else { toast(`Neue Wörter ab Rang ${r}`); render(); }
@@ -612,6 +615,7 @@ document.addEventListener("click", async (e) => {
     case "mineAdd": mineAdd(); break;
     case "mineClear": mine.preview = null; mine.err = ""; renderPreview(); break;
     case "delCustom": { const w = BY.get(r); St.removeCustom(r); closeSheet(); if (view === "woerter") renderWoerter(); toast(`„${w?.w}“ gelöscht`); break; }
+    case "ownSentence": closeSheet(); location.hash = `saetze/eigen~${r}`; break;
     case "account": openAccount(); break;
     case "mode-up": openAccount("up"); break;
     case "mode-in": openAccount("in"); break;
@@ -631,10 +635,10 @@ $("accountBtn").addEventListener("click", () => openAccount());
 $("helpBtn").addEventListener("click", () => openSheet(helpHTML(view)));
 document.addEventListener("submit", (e) => {
   if (e.target.id === "boardName") { e.preventDefault(); const n = String(new FormData(e.target).get("n") || "").trim().slice(0, 40); if (!n) return toast("Bitte einen Namen eingeben"); St.S.board = { ...(St.S.board || {}), name: n }; St.save(); toast("Name gespeichert"); setTimeout(loadBoard, 1500); return; }
-  Learn.onSubmit(e);
+  if (!Saetze.onSubmit(e)) Learn.onSubmit(e);
 });
 document.addEventListener("keydown", (e) => {
-  if (Learn.onKey(e, view)) return;
+  if (Learn.onKey(e, view) || Saetze.onKey(e, view)) return;
   if (view !== "karten" || $("sheet").open || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;
   if ((e.key === " " || e.key === "Enter") && !flipped && $("flip")) { e.preventDefault(); flip(); }
   else if (flipped && e.key === "ArrowLeft") doAnswer(1);

@@ -27,7 +27,8 @@ export const fresh = () => ({
   hist: {}, streak: { n: 0, last: "" }, xp: 0, updated: 0,
   lang: "en", custom: {}, nextCustom: CUSTOM_BASE,
   path: { mode: "freq", theme: "" }, themes: {},
-  board: { visible: false, name: "" }, // leaderboard opt-in + display name // where new daily words come from: frequency order or one theme
+  board: { visible: false, name: "" }, // leaderboard opt-in + display name
+  used: {}, pats: {}, // Sätze: points per word for using it in a sentence (2 = can use it), practised sentence patterns // where new daily words come from: frequency order or one theme
 });
 
 export let S = fresh();

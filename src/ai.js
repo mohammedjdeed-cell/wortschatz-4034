@@ -72,7 +72,7 @@ export async function aiCall(mode, payload) {
   if (res.status === 429) throw new Error("limited");
   if (res.status === 503 || res.status === 404 || res.status === 405) throw new Error("off");
   if (!res.ok) throw new Error("err");
-  const j = await res.json(); return mode === "theme" ? j.theme : j.items || [];
+  const j = await res.json(); return mode === "theme" ? j.theme : mode === "check" ? j.check : j.items || [];
 }
 
 /** Own words (ids 100001–199999) get their example sentences lazily, stored in the learner's own state. */

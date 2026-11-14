@@ -471,3 +471,15 @@ select.input { height: 40px; }
 .answer.grades .btn { height: auto; min-height: 52px; flex-direction: column; gap: 1px; padding: 6px 4px; line-height: 1.15; }
 .answer.grades small { font-size: 0.72rem; opacity: 0.75; }
 .answer.grades .kbd { display: none; }
+/* Sätze */
+.satzwort { gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.sline { min-height: 56px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); background: var(--sunk); }
+.sline.good { border: 1px solid var(--ok); } .sline.bad { border: 1px solid var(--die); }
+.spool { display: flex; flex-wrap: wrap; gap: 6px; min-height: 40px; }
+.stile { font: 500 1.05rem/1 var(--f-word); padding: 9px 12px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); }
+.stile:hover:not(:disabled) { background: var(--hover); }
+.stile.hl { border-color: var(--fg); border-width: 2px; font-weight: 650; }
+.cloze .sgap { color: var(--fg); font-weight: 650; text-align: center; padding: 0 4px; }
+.errlist { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.errlist s { color: var(--die); }
+#ownText { width: 100%; font: 400 1.1rem/1.4 var(--f-word); }

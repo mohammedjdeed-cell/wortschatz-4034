@@ -100,6 +100,7 @@ export function renderUeben() {
     ${card("#schreiben", "⌨️", "Schreiben", "Bedeutung sehen, deutsches Wort mit Artikel tippen", due ? `<span class="badge">${due} fällig</span>` : "")}
     ${card("#quiz", "❓", "Schnell-Quiz", "10 Fragen, 4 Antworten – mit ähnlichen Wörtern als Falle", `<span class="badge">${n} Wörter</span>`)}
     ${card("#artikel", "🎯", "der · die · das", "Artikel-Training im Sekundentakt")}
+    ${card("#saetze", "🧱", "Sätze", "Vom Wort zum Satz: Satzbau, Kasus-Lücken, eigene Sätze mit KI-Korrektur, Satzmuster für die FSP")}
   </div></div>
   <div class="section"><h2>Zu zweit</h2><div class="modes">
     ${card("#erklaer", "🗣️", "Erklär’s!", "Ein Handy, zwei Teams: Wort auf Deutsch erklären, ohne es zu sagen")}
@@ -107,7 +108,7 @@ export function renderUeben() {
   </div></div>`;
 }
 /** Words the learner has met: box + known + own words; falls back to their level band. */
-function learnedPool() {
+export function learnedPool() {
   const rs = [...Object.keys(St.S.learn), ...Object.keys(St.S.known)].map(Number).filter((r) => BY.has(r));
   return [...new Set(rs)];
 }
@@ -120,7 +121,7 @@ function levelPool() {
 // art (article + plural), type (typed recall). A word answered right twice in quizzes is asked as "type" from then on.
 const posClass = (w) => (isNoun(w.p) ? "noun" : ["verb", "adj", "adv"].includes(w.p) ? w.p : "other");
 const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
-const sentOf = (r) => SENT[r] || St.S.custom?.[r]?.s || BY.get(r)?.s || null;
+export const sentOf = (r) => SENT[r] || St.S.custom?.[r]?.s || BY.get(r)?.s || null;
 const singleArt = (w) => isNoun(w.p) && !w.p.includes(",");
 let FOLDED = null;
 const foldedKeys = () => FOLDED || (FOLDED = WORDS.map((x) => [x, fold(keyOf(x))]));
@@ -148,6 +149,7 @@ export function makeQuestions(pool, n = 10) {
   return shuffle([...new Set(pool)].filter((r) => BY.has(r))).slice(0, n).map((r, i) => ({ r, t: i % 2 ? "tr" : "de", o: shuffle([r, ...distractors(r, 3)]) }));
 }
 /** Where the word sits in its example sentence (inflected forms by stem), or null. */
+export { clozeOf as wordSpan };
 function clozeOf(r) {
   const s = sentOf(r); const w = BY.get(r); if (!s?.de || !w) return null;
   const key = keyOf(w).replace(/^sich\s+/, "");

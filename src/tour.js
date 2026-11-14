@@ -134,6 +134,7 @@ const HELP = {
     ["Karteikarten", T("Spaced repetition (FSRS): tap to flip, then rate how well you knew it – Nochmal, Schwer, Gut or Leicht.", "مراجعة متباعدة (FSRS): اضغط لقلب البطاقة، ثم قيّم مدى معرفتك بها – Nochmal أو Schwer أو Gut أو Leicht.")],
     ["Schreiben", T("See the meaning, type the German word – nouns with article. Small typos and correct synonyms count.", "ترى المعنى وتكتب الكلمة الألمانية – والأسماء مع أداة التعريف. تُقبل الأخطاء الإملائية البسيطة والمرادفات الصحيحة.")],
     ["Schnell-Quiz", T("10 questions, 4 answers. Wrong answers come from the same theme, so guessing does not help.", "عشرة أسئلة بأربعة خيارات. الخيارات الخاطئة من الموضوع نفسه، فلا يفيد التخمين.")],
+    ["Sätze", T("From word to sentence: put words in order, fill article/case gaps, write your own sentence and get it corrected by the AI, and drill FSP sentence patterns (verb + preposition, Nebensatz, Passiv, Konjunktiv II, Anamnese, Aufklärung).", "من الكلمة إلى الجملة: رتّب الكلمات، واملأ فراغات الأداة والحالة الإعرابية، واكتب جملتك الخاصة ليصحّحها الذكاء الاصطناعي، وتدرّب على أنماط جمل امتحان FSP (فعل + حرف جر، الجملة الفرعية، المبني للمجهول، Konjunktiv II، أخذ السيرة المرضية، التوعية).")],
     ["der · die · das", T("20 nouns: pick the right article (keys 1-2-3 on a laptop).", "عشرون اسمًا: اختر أداة التعريف الصحيحة (المفاتيح 1-2-3 على الحاسوب).")],
     ["Erklär’s!", T("Two teams, one phone: explain the word in German without saying it; your team guesses before the time runs out.", "فريقان وهاتف واحد: اشرح الكلمة بالألمانية دون أن تذكرها، ويخمّن فريقك قبل انتهاء الوقت.")],
     ["Wort-Duell", T("Create a duel, share the link or 6-letter code. Both answer the same 10 questions; the score updates live. Needs an account.", "أنشئ مبارزة وشارك الرابط أو الرمز المكوّن من 6 أحرف. يجيب الطرفان عن الأسئلة العشرة نفسها وتتحدث النتيجة مباشرة. يتطلب حسابًا.")],
@@ -157,7 +158,7 @@ const HELP = {
     ["Einstellungen", T("Start level, translation language, words per day, light/dark, photos, speech speed, backup, reset – and the tour.", "مستوى البداية، لغة الترجمة، عدد الكلمات يوميًا، الوضع الفاتح/الداكن، الصور، سرعة النطق، النسخ الاحتياطي، إعادة الضبط – والجولة التعريفية.")],
   ] },
 };
-const HELP_ALIAS = { thema: "themen", lektion: "themen", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
+const HELP_ALIAS = { thema: "themen", lektion: "themen", saetze: "ueben", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
 export function helpHTML(view) {
   const lang = L(); const h = HELP[HELP_ALIAS[view] || view] || HELP.heute;
   return `<div class="help ${lang === "ar" ? "ar" : ""}" dir="${lang === "ar" ? "rtl" : "ltr"}" lang="${lang}"><h2>${esc(h.t[lang])}</h2>

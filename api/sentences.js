@@ -4,6 +4,7 @@
 //   "words"               – look up / correct the user's own words and fill in translations, article, sentences
 //   "topic"               – suggest words for a topic (e.g. "Körper", "Kardiologie", "Technik")
 //   "translate"           – Arabic glosses for dictionary words (used to build src/data/ar.json)
+//   "check"               – correct a sentence the learner wrote with a target word (Sätze → Eigener Satz)
 import Anthropic from "@anthropic-ai/sdk";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
@@ -38,6 +39,7 @@ const SCHEMAS = {
   topic: list(obj({ w: str, art: str, pos: str, e: str, ar: str, ...SENT_FIELDS })),
   translate: list(obj({ r: { type: "integer" }, ar: str })),
   theme: obj({ name: str, emoji: str, desc: str, units: { type: "array", items: obj({ title: str, words: { type: "array", items: obj({ w: str, art: str, pos: str, e: str, ar: str, emoji: str, pl: str, tip: str }) } }) } }),
+  check: obj({ ok: { type: "boolean" }, uses: { type: "boolean" }, corrected: str, errors: { type: "array", items: obj({ wrong: str, right: str, why: str, why_ar: str }) }, tip: str, tip_ar: str }),
   categorize: list(obj({ r: { type: "integer" }, c: { type: "string", enum: ["basis", "zeit", "zahlen", "menschen", "koerper", "medizin", "gefuehle", "sprechen", "alltag", "raum", "wohnen", "essen", "arbeit", "geld", "bildung", "staat", "gesellschaft", "natur", "reisen", "technik", "eigenschaften", "abstrakt"] } })),
 };
 
@@ -91,6 +93,14 @@ technik = technology, machines, materials, computers, energy (Computer, Maschine
 eigenschaften = adjectives/adverbs that describe qualities and judgements without a clear topic (groß, gut, schnell, wichtig, einfach).
 abstrakt = abstract nouns/verbs for reasoning and argumentation (Problem, Ergebnis, Möglichkeit, Grund, entwickeln, Bedeutung).
 Prefer a concrete theme over eigenschaften/alltag/abstrakt when the word clearly belongs to one. Return r unchanged.`,
+  check: `${AUDIENCE}
+The learner wrote one German sentence to practise a target word. Check it like a friendly C1 teacher.
+- ok: true if the sentence is grammatically correct and sounds natural (small style differences are fine).
+- uses: true if the target word (any inflected form) is used with the given meaning.
+- corrected: the corrected sentence, changing as little as possible; identical to the input if ok.
+- errors: up to 4 concrete mistakes: wrong (the learner's fragment), right (the fix), why (max 12 English words naming the rule, e.g. "Akkusativ after für", "verb at the end in a weil clause"), why_ar (the same in Arabic).
+- tip: one short English tip (max 15 words): a more natural or more precise (C1/clinical) way to say it, or "" if none. tip_ar: the same in Arabic.
+Never rewrite the content beyond fixing language. Ignore a missing final full stop.`,
   translate: `Translate each German dictionary entry into a short Modern Standard Arabic meaning (max 5 words; give the 1–2 most common senses separated by "، "). The English gloss tells you the intended sense. Return r unchanged.`,
 };
 
@@ -125,6 +135,10 @@ function buildRequest(mode, body) {
     const level = clip(body.level, 4) || "B1";
     const exclude = (Array.isArray(body.exclude) ? body.exclude : []).map((s) => clip(s, 40)).slice(0, 300);
     return { text: `Request: ${request}\nLevel: ${level}\nLessons: ${units} (about 10 words each)\nExclude: ${exclude.join(", ") || "(none)"}` };
+  }
+  if (mode === "check") {
+    const word = clip(body.word, 60).trim(), sentence = clip(body.sentence, 300).trim(); if (!word || !sentence) return null;
+    return { text: `Target word: ${word} (${clip(body.meaning, 80)})\nSentence: ${sentence}` };
   }
   if (mode === "topic") {
     const topic = clip(body.topic, 80).trim(); if (!topic) return null;
@@ -163,7 +177,7 @@ export default async function handler(req, res) {
   try {
     const msg = await client.beta.messages.create({
       model: MODEL,
-      max_tokens: mode === "sentences" ? 8000 : 16000,
+      max_tokens: mode === "sentences" ? 8000 : mode === "check" ? 2000 : 16000,
       ...FALLBACK,
       output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMAS[mode] } },
       system: PROMPTS[mode],
@@ -173,6 +187,7 @@ export default async function handler(req, res) {
     const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
     const parsed = JSON.parse(text);
     if (mode === "theme") { res.setHeader("Cache-Control", "no-store"); return res.status(200).json({ theme: parsed, model: msg.model }); }
+    if (mode === "check") { res.setHeader("Cache-Control", "no-store"); return res.status(200).json({ check: parsed, model: msg.model }); }
     let items = parsed.items || [];
     if (built.allowed) items = items.filter((o) => built.allowed.has(Number(o.r)));
     if (mode === "sentences") items = items.filter((o) => o.de);
