@@ -454,3 +454,16 @@ select.input { height: 40px; }
 .welcome-langs .ar { font-family: "IBM Plex Sans Arabic", sans-serif; font-size: 1.05rem; }
 @media (pointer: coarse) { .kbd { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* lesson session + quiz types */
+.intro { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 22px 18px; }
+.intro .qword { font-size: 2.2rem; }
+.introsent { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.cloze { font: 400 1.35rem/1.5 var(--f-word); margin: 0; max-width: 34ch; }
+.cloze .gap { display: inline-block; min-width: 3.5em; border-bottom: 2px solid var(--fg); color: transparent; margin: 0 2px; }
+.listenbtn { font-size: 1.05rem; padding: 0 22px; }
+.nextles { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-items: center; gap: 2px 12px; margin-top: 12px; color: inherit; text-decoration: none; }
+.nextles .lbl { grid-column: 1; } .nextles b { grid-column: 1; } .nextles .btn { grid-column: 2; grid-row: 1 / 3; }
+.nextles:hover { background: var(--hover); }
+.nowrap { white-space: nowrap; }
+.qhead .qmeter { flex: 1; margin: 0 12px; } .qhead .qok { color: var(--ok); }

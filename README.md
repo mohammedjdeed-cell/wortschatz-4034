@@ -25,6 +25,8 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
 - **Meine Wörter (own words):**
   - Type your own words (any spelling, with or without article). Each word is matched against the 4034-word dictionary first; the AI fills in the rest.
   - Or ask for a topic ("Körper", "Kardiologie", "Technik") and the AI suggests words at your level. Words already in the dictionary are linked to it rather than duplicated.
+- **Lektionen:** "Lernen" in a theme opens the lesson in place: the ~10 words one by one (picture, word, meaning, 🔊, sentence), then a mini-quiz in two rounds mixed with a few earlier words, then **Nächste Lektion →**. With a theme as learning path, Heute shows "Weiter mit Lektion N".
+- **Quiz types:** meaning, listening (TTS), sentence gap (cloze), article + plural, typed recall; look-alike distractors (edit distance ≤ 2 or same prefix). A word answered right twice is asked as typing from then on.
 - **Themen:** 22 situational themes with level-ordered lessons, two exam packs (**FSP Arzt** and **FSP Zahnarzt**, Düsseldorf, `src/data/packs.json`, ordered by exam part), and **own themes built by the AI** from any request (e.g. "Fach Zahnarzt – Prothetik").
 - **Üben:** flashcards, typed recall, quick quiz, der/die/das trainer; for two people: Erklär's! (one phone) and Wort-Duell (online).
 - **Tutorial:** first-visit welcome with the choice of English or Arabic, a guided spotlight tour, and a "?" help page for every screen (`src/tour.js`).
@@ -93,7 +95,7 @@ npx vite build --mode test --outDir /tmp/dist-test
 npx vite preview --port 4173 --outDir /tmp/dist-test &
 node tests/smoke.mjs
 ```
-Opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
+`node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
 
 ## Data model (Firestore)
 | Path | Who | Content |

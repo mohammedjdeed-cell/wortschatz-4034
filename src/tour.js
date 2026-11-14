@@ -126,9 +126,9 @@ const HELP = {
     ["Prüfungsvorbereitung", T("FSP packs for doctors (Ärztekammer Nordrhein) and dentists (Zahnärztekammer Nordrhein), ordered by exam part: Anamnese, Untersuchung, Aufklärung, Arztbrief, Fallvorstellung.", "حزم امتحان FSP للأطباء (Ärztekammer Nordrhein) ولأطباء الأسنان (Zahnärztekammer Nordrhein)، مرتبة حسب أجزاء الامتحان: أخذ السيرة المرضية، الفحص، التوعية قبل الإجراء، الرسالة الطبية، عرض الحالة.")],
     ["Thema erstellen", T("Describe what you need (e.g. ‘Fach Zahnarzt – Prothetik’). The AI builds lessons; words already in the dictionary are linked. Check the preview, then ‘Thema speichern’.", "صف ما تحتاجه (مثل ‹Fach Zahnarzt – Prothetik›). يبني الذكاء الاصطناعي الدروس، وتُربط الكلمات الموجودة في القاموس. راجع المعاينة ثم اضغط ‹Thema speichern›.")],
     ["Nach Häufigkeit", T("Switch your daily new words back to the plain frequency order.", "إعادة الكلمات اليومية الجديدة إلى ترتيب الشيوع العادي.")],
-    ["Lektion · Lernen", T("Puts the lesson's ~10 words into today's list and your card box.", "يضع كلمات الدرس (نحو 10) في قائمة اليوم وصندوق البطاقات.")],
+    ["Lektion · Lernen", T("Shows the lesson's ~10 words one by one (picture, meaning, 🔊, sentence), then a mini-quiz. The words go into your card box; ‘Nächste Lektion →’ continues.", "يعرض كلمات الدرس (نحو 10) واحدة تلو الأخرى (صورة، معنى، 🔊، جملة)، ثم اختبارًا قصيرًا. تُضاف الكلمات إلى صندوق البطاقات، و‹Nächste Lektion →› ينقلك للدرس التالي.")],
     ["Als Lernweg wählen", T("From now on your daily new words come from this theme.", "من الآن تأتي كلماتك اليومية الجديدة من هذا الموضوع.")],
-    ["Quiz / Wiederholen", T("A quick multiple-choice quiz on the theme or lesson.", "اختبار سريع متعدد الخيارات على الموضوع أو الدرس.")],
+    ["Quiz / Wiederholen", T("Mixed questions: meaning, listening, sentence gaps, article + plural. A word you got right twice is asked as typing.", "أسئلة متنوعة: المعنى، الاستماع، الفراغ في الجملة، الأداة والجمع. الكلمة التي أجبت عنها صحيحًا مرتين تُطلب كتابتها.")],
   ] },
   ueben: { t: T("Üben – practice", "Üben – التمرين"), items: [
     ["Karteikarten", T("Spaced repetition: tap to flip, then ‘Gewusst’ (box up, review later) or ‘Nochmal’ (back to box 1).", "مراجعة متباعدة: اضغط لقلب البطاقة، ثم ‹Gewusst› (تنتقل لصندوق أعلى وتُراجع لاحقًا) أو ‹Nochmal› (تعود للصندوق 1).")],
@@ -157,7 +157,7 @@ const HELP = {
     ["Einstellungen", T("Start level, translation language, words per day, light/dark, photos, speech speed, backup, reset – and the tour.", "مستوى البداية، لغة الترجمة، عدد الكلمات يوميًا، الوضع الفاتح/الداكن، الصور، سرعة النطق، النسخ الاحتياطي، إعادة الضبط – والجولة التعريفية.")],
   ] },
 };
-const HELP_ALIAS = { thema: "themen", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
+const HELP_ALIAS = { thema: "themen", lektion: "themen", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
 export function helpHTML(view) {
   const lang = L(); const h = HELP[HELP_ALIAS[view] || view] || HELP.heute;
   return `<div class="help ${lang === "ar" ? "ar" : ""}" dir="${lang === "ar" ? "rtl" : "ltr"}" lang="${lang}"><h2>${esc(h.t[lang])}</h2>

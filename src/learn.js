@@ -115,41 +115,135 @@ function levelPool() {
   const b = BANDS.find((x) => x.id === levelOf()); return WORDS.filter((w) => w.r >= b.from && w.r <= b.to).map((w) => w.r);
 }
 
-/* ================= QUIZ ENGINE (solo quiz + duel) ================= */
+/* ================= QUIZ ENGINE (solo quiz, lessons, duel) ================= */
+// Question types: de (German → meaning), tr (meaning → German), listen (hear → German), cloze (sentence gap),
+// art (article + plural), type (typed recall). A word answered right twice in quizzes is asked as "type" from then on.
 const posClass = (w) => (isNoun(w.p) ? "noun" : ["verb", "adj", "adv"].includes(w.p) ? w.p : "other");
-function distractors(r, k) {
+const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
+const sentOf = (r) => SENT[r] || St.S.custom?.[r]?.s || BY.get(r)?.s || null;
+const singleArt = (w) => isNoun(w.p) && !w.p.includes(",");
+let FOLDED = null;
+const foldedKeys = () => FOLDED || (FOLDED = WORDS.map((x) => [x, fold(keyOf(x))]));
+/** Words that look or sound like the target: edit distance ≤ 2 or the same first 4 letters. */
+function lookAlikes(w) {
+  const k = fold(keyOf(w)); const cls = posClass(w);
+  return foldedKeys().filter(([x, fk]) => x.r !== w.r && fk !== k && posClass(x) === cls && Math.abs(fk.length - k.length) <= 3
+    && ((k.length >= 4 && fk.slice(0, 4) === k.slice(0, 4)) || lev(fk, k) <= 2)).map(([x]) => x);
+}
+function distractors(r, k, { similar = false, extra = [] } = {}) {
   const w = BY.get(r); const cls = posClass(w); const gl = (x) => (H.isAr() ? x.ar || x.e : x.e);
   const used = new Set([gl(w)]), keys = new Set([keyOf(w)]), out = [];
-  const take = (list) => { for (const x of shuffle(list)) { if (out.length >= k) return; if (!x || x.r === r || used.has(gl(x)) || keys.has(keyOf(x))) continue; used.add(gl(x)); keys.add(keyOf(x)); out.push(x.r); } };
+  const take = (list, max = k) => { for (const x of shuffle(list)) { if (out.length >= max) return; if (!x || x.r === r || used.has(gl(x)) || keys.has(keyOf(x))) continue; used.add(gl(x)); keys.add(keyOf(x)); out.push(x.r); } };
   const near = Math.min(r, 3400);
+  if (similar) take(lookAlikes(w), 2); // at most two look-alikes, so the right answer is not the odd one out
+  take(extra.map((x) => BY.get(x)).filter((x) => x && posClass(x) === cls)); // lesson / learned words first
   take(themeRanks(themeOf(r)).map((x) => BY.get(x)).filter((x) => x && posClass(x) === cls)); // same theme + word class = plausible traps
   if (out.length < k) take(WORDS.filter((x) => posClass(x) === cls && Math.abs(x.r - (r > 4034 ? 1500 : near)) < 600));
   if (out.length < k) take(WORDS.filter((x) => posClass(x) === cls));
   if (out.length < k) take(WORDS); // never fewer than 4 options
   return out;
 }
+/** Duel questions: simple recognition, identical for both players. */
 export function makeQuestions(pool, n = 10) {
   return shuffle([...new Set(pool)].filter((r) => BY.has(r))).slice(0, n).map((r, i) => ({ r, t: i % 2 ? "tr" : "de", o: shuffle([r, ...distractors(r, 3)]) }));
 }
-let quiz = null; // { qs, i, res: [0/1], src, mode: "solo"|"duel", locked }
-function questionHTML(q, i, total) {
-  const w = BY.get(q.r);
-  const prompt = q.t === "de" ? `<div class="word qword">${wordHTML(w)}</div>${H.spkBtn(sayText(w))}` : `<div class="qword">${H.gloss(w, "gloss-big")}</div>${tile(w)}`;
-  const opt = (r, k) => { const x = BY.get(r); return `<button class="opt" data-opt="${k}"><span class="kbd">${k + 1}</span>${q.t === "de" ? H.gloss(x) : `<span class="word">${wordHTML(x)}</span>`}</button>`; };
-  return `<div class="qhead"><span class="muted small">Frage ${i + 1} von ${total}</span><div class="dots">${Array.from({ length: total }, (_, k) => `<i class="${k < quiz.res.length ? (quiz.res[k] ? "ok" : "no") : k === i ? "cur" : ""}"></i>`).join("")}</div></div>
-    <div class="panel qcard"><span class="lbl">${q.t === "de" ? "Was bedeutet …" : "Wie heißt das auf Deutsch?"}</span>${prompt}</div>
-    <div class="opts">${q.o.map(opt).join("")}</div>`;
+/** Where the word sits in its example sentence (inflected forms by stem), or null. */
+function clozeOf(r) {
+  const s = sentOf(r); const w = BY.get(r); if (!s?.de || !w) return null;
+  const key = keyOf(w).replace(/^sich\s+/, "");
+  if (/\s/.test(key)) { const i = s.de.toLowerCase().indexOf(key.toLowerCase()); return i < 0 ? null : { de: s.de, at: i, len: key.length, s }; }
+  const stem = fold(w.p === "verb" ? key.replace(/(e?n)$/, "") : key.replace(/(e|en)$/, ""));
+  if (stem.length < 3) return null;
+  for (const m of s.de.matchAll(/[A-Za-zÄÖÜäöüß]+/g)) {
+    const t = fold(m[0]); if (t.startsWith(stem) && t.length <= fold(key).length + 4) return { de: s.de, at: m.index, len: m[0].length, s };
+  }
+  return null;
 }
+const pluralOf = (r) => { const p = (sentOf(r)?.pl || "").replace(/^die\s+/i, "").trim(); return p && p !== "–" && p !== "-" && !/\s/.test(p) ? p : ""; };
+function wrongPlural(key, right) {
+  const uml = key.replace(/([aou])(?!.*[aou])/i, (c) => ({ a: "ä", o: "ö", u: "ü", A: "Ä", O: "Ö", U: "Ü" })[c]);
+  const opts = [key + "e", key + "en", key + "er", key + "s", key + "n", uml + "e", uml + "er", key].filter((x) => x !== right && !/(ee|nn)$/.test(x) || x === key);
+  return shuffle(opts.filter((x) => x !== right))[0];
+}
+const quizLevel = (r) => (St.S.known[r] ? 2 : St.S.learn[r]?.qc || 0);
+function pickType(r, stage) {
+  const w = BY.get(r); if (!w) return "de";
+  if (quizLevel(r) >= 2) return "type";
+  if (stage === 0) return shuffle(canSpeak ? ["de", "de", "listen"] : ["de"])[0];
+  const hard = ["tr"]; if (clozeOf(r)) hard.push("cloze", "cloze"); if (singleArt(w)) hard.push("art");
+  return shuffle(hard)[0];
+}
+/** Fill in type and options right before a question is shown (sentences may have arrived by then). */
+function prepQuestion(q, extra = []) {
+  if (q.t) return q;
+  q.t = pickType(q.r, q.stage ?? Math.round(Math.random()));
+  const w = BY.get(q.r);
+  if (q.t === "art") {
+    const a = w.p.trim(), pl = pluralOf(q.r), others = shuffle(["der", "die", "das"].filter((x) => x !== a)), key = keyOf(w);
+    if (pl) { const bad = wrongPlural(key, pl); q.o = shuffle([[a, pl], [others[0], pl], [a, bad], [others[1], bad]]).map(([x, p]) => `${x}|${p}`); q.ok = `${a}|${pl}`; }
+    else { q.o = ["der", "die", "das"]; q.ok = a; }
+  } else if (q.t !== "type") q.o = shuffle([q.r, ...distractors(q.r, 3, { similar: q.t !== "de", extra })]);
+  return q;
+}
+const isRight = (q, k) => (q.t === "art" ? q.o[k] === q.ok : q.o[k] === q.r);
+function questionHTML(q, i, total) {
+  const w = BY.get(q.r); const t = q.t || "de";
+  const prog = total > 12 ? `<span class="meter qmeter"><i style="width:${(i / total) * 100}%"></i></span><span class="small mono qok">${quiz.res.filter(Boolean).length} ✓</span>`
+    : `<div class="dots">${Array.from({ length: total }, (_, k) => `<i class="${k < quiz.res.length ? (quiz.res[k] ? "ok" : "no") : k === i ? "cur" : ""}"></i>`).join("")}</div>`;
+  const dots = `<div class="qhead"><span class="muted small nowrap">Frage ${i + 1} von ${total}</span>${prog}</div>`;
+  const gw = (x) => `<span class="word">${wordHTML(x)}</span>`;
+  let label, prompt;
+  if (t === "de") { label = "Was bedeutet …"; prompt = `<div class="word qword">${wordHTML(w)}</div>${H.spkBtn(sayText(w))}`; }
+  else if (t === "tr") { label = "Wie heißt das auf Deutsch?"; prompt = `<div class="qword">${H.gloss(w, "gloss-big")}</div>${tile(w)}`; }
+  else if (t === "listen") { label = "Was hörst du?"; prompt = `<button class="btn big listenbtn" data-say="${esc(sayText(w))}">🔊 Nochmal hören</button>`; }
+  else if (t === "cloze") {
+    const c = clozeOf(q.r); const s = c.s; const tr = H.isAr() && s.ar_s ? `<span class="tr ar" dir="rtl" lang="ar">${esc(s.ar_s)}</span>` : `<span class="en">${esc(s.en || "")}</span>`;
+    label = "Welches Wort fehlt?"; prompt = `<p class="cloze">${esc(c.de.slice(0, c.at))}<span class="gap">${"_".repeat(Math.max(4, Math.min(12, c.len)))}</span>${esc(c.de.slice(c.at + c.len))}</p>${tr}`;
+  } else if (t === "art") { label = "Artikel und Plural?"; prompt = `<div class="word qword">${esc(keyOf(w))}</div>${H.gloss(w)}`; }
+  else { // type
+    const res = q.typed;
+    return `${dots}<div class="panel qcard">${tile(w, "", { photo: true })}<span class="lbl">Schreib das Wort${isNoun(w.p) ? " mit Artikel" : ""}</span>${H.gloss(w, "gloss-big")}</div>
+      <form id="qTypeForm" class="typeform" autocomplete="off"><input id="typeIn" class="input big" lang="de" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${isNoun(w.p) ? "z. B. der Tisch" : "Deutsches Wort"}" ${res ? "disabled" : ""} value="${esc(q.input || "")}">
+        <div class="umlauts">${["ä", "ö", "ü", "ß"].map((c) => `<button type="button" class="btn" data-ins="${c}">${c}</button>`).join("")}<button class="btn primary" type="submit">${res ? "Weiter" : "Prüfen"}</button></div></form>
+      ${res ? typeResult(w, res) : ""}`;
+  }
+  const opt = (o, k) => {
+    let body;
+    if (t === "de") body = H.gloss(BY.get(o));
+    else if (t === "art") { const [a, p] = String(o).split("|"); body = `<span class="word"><span class="art g-${a}">${a}</span> ${esc(keyOf(w))}${p ? ` <span class="muted">· Pl. ${esc(p)}</span>` : ""}</span>`; }
+    else if (t === "cloze") body = `<span class="word">${esc(keyOf(BY.get(o)))}</span>`;
+    else body = gw(BY.get(o));
+    return `<button class="opt" data-opt="${k}"><span class="kbd">${k + 1}</span>${body}</button>`;
+  };
+  return `${dots}<div class="panel qcard"><span class="lbl">${label}</span>${prompt}</div><div class="opts">${q.o.map(opt).join("")}</div>`;
+}
+/** After a question is on screen: listening questions read the word aloud, typing questions focus the input. */
+function afterQuestion(q) {
+  if (q.t === "listen" && !q.played) { q.played = true; H.speak(sayText(BY.get(q.r))); }
+  if (q.t === "type") { const i = $("typeIn"); if (i && !i.disabled) i.focus(); else document.querySelector("#qTypeForm [type=submit]")?.focus(); attachPhotos(main()); }
+}
+function record(q, right) { if (quiz.mode !== "duel") St.quizMark(q.r, right); if (!right && quiz.requeue) quiz.requeue(q); }
+let quiz = null; // { qs, i, res: [0/1], src, mode: "solo"|"lesson"|"duel", locked }
 function answerOpt(k, after) {
-  if (!quiz || quiz.locked) return; const q = quiz.qs[quiz.i]; if (!q) return; quiz.locked = true;
-  const right = q.o[k] === q.r; quiz.res.push(right ? 1 : 0); quiz.i++; vib(right ? 15 : [30, 40, 30]); // count the answer now, even if the user leaves during the animation
-  document.querySelectorAll(".opt").forEach((b) => { const idx = Number(b.dataset.opt); if (q.o[idx] === q.r) b.classList.add("right"); else if (idx === k) b.classList.add("wrong"); b.disabled = true; });
-  const cur = quiz; timers.push(setTimeout(() => { cur.locked = false; if (quiz === cur) after(right); }, right ? 650 : 1500));
+  if (!quiz || quiz.locked) return; const q = quiz.qs[quiz.i]; if (!q || q.t === "type") return; quiz.locked = true;
+  const right = isRight(q, k); quiz.res.push(right ? 1 : 0); quiz.i++; record(q, right); vib(right ? 15 : [30, 40, 30]); // count the answer now, even if the user leaves during the animation
+  document.querySelectorAll(".opt").forEach((b) => { const idx = Number(b.dataset.opt); if (isRight(q, idx)) b.classList.add("right"); else if (idx === k) b.classList.add("wrong"); b.disabled = true; });
+  if (q.t !== "de" && q.t !== "art") H.speak(sayText(BY.get(q.r)));
+  const cur = quiz; timers.push(setTimeout(() => { cur.locked = false; if (quiz === cur) after(right); }, right ? 750 : 1700));
+}
+/** Typed answer inside a quiz: first submit checks, second submit moves on. */
+function submitQuizTyping(redraw) {
+  const q = quiz?.qs[quiz.i]; if (!q || q.t !== "type") return;
+  if (q.typed) { quiz.res.push(q.typed.good ? 1 : 0); quiz.i++; record(q, q.typed.good); redraw(); return; }
+  const v = $("typeIn")?.value || ""; if (!v.trim()) return; q.input = v;
+  q.typed = checkTyped(BY.get(q.r), v); vib(q.typed.good ? 15 : [30, 40, 30]); H.speak(sayText(BY.get(q.r))); getSentences([q.r]); redraw();
 }
 export function startQuiz(pool, src) {
   leave();
+  pool = [...new Set(pool)].filter((r) => BY.has(r));
   if (pool.length < 4) { H.toast("Dafür brauchst du mindestens 4 Wörter – lerne zuerst ein paar."); location.hash = "ueben"; return; }
-  quiz = { qs: makeQuestions(pool, 10), i: 0, res: [], src, mode: "solo", locked: false };
+  quiz = { qs: shuffle(pool).slice(0, 10).map((r) => ({ r })), i: 0, res: [], src, mode: "solo", locked: false, pool };
+  getSentences(quiz.qs.map((q) => q.r));
   if (location.hash !== "#quiz") location.hash = "quiz"; else renderQuiz();
 }
 export function renderQuiz() {
@@ -157,14 +251,80 @@ export function renderQuiz() {
   if (!quiz || quiz.mode !== "solo") { const p = learnedPool(); startQuiz(p.length >= 8 ? p : [...p, ...levelPool()], "Gelernte Wörter"); return; }
   leave(); // a fresh render never has an answer animation pending
   if (quiz.i >= quiz.qs.length) return renderQuizEnd();
-  main().innerHTML = `<div class="deck"><div class="deckbar"><span><b>Schnell-Quiz</b> · ${esc(quiz.src)}</span><a class="btn ghost" href="#ueben">Beenden</a></div>${questionHTML(quiz.qs[quiz.i], quiz.i, quiz.qs.length)}</div>`;
+  const q = prepQuestion(quiz.qs[quiz.i], quiz.pool);
+  main().innerHTML = `<div class="deck"><div class="deckbar"><span><b>Schnell-Quiz</b> · ${esc(quiz.src)}</span><a class="btn ghost" href="#ueben">Beenden</a></div>${questionHTML(q, quiz.i, quiz.qs.length)}</div>`;
+  afterQuestion(q);
+}
+function missedHTML(missed) {
+  return missed.length ? `<p>Diese Wörter solltest du wiederholen:</p><div class="chips-list">${missed.map((r) => `<button class="chipbtn" data-open="${r}">${wordHTML(BY.get(r))}</button>`).join("")}</div>` : "<p>Alles richtig – stark!</p>";
 }
 function renderQuizEnd() {
   quiz.ended = true; const ok = quiz.res.filter(Boolean).length; St.logPractice(quiz.qs.length);
-  const missed = quiz.qs.filter((q, i) => !quiz.res[i]).map((q) => q.r);
+  const missed = [...new Set(quiz.qs.filter((q, i) => !quiz.res[i]).map((q) => q.r))];
   main().innerHTML = `<div class="deck"><div class="panel empty"><div class="big">${ok >= 8 ? "🏆" : ok >= 5 ? "👍" : "💪"}</div><h2>${ok} von ${quiz.qs.length} richtig</h2>
-    ${missed.length ? `<p>Diese Wörter solltest du wiederholen:</p><div class="chips-list">${missed.map((r) => `<button class="chipbtn" data-open="${r}">${wordHTML(BY.get(r))}</button>`).join("")}</div>` : "<p>Alles richtig – stark!</p>"}
+    ${missedHTML(missed)}
     <div class="row" style="justify-content:center">${missed.length ? `<button class="btn" data-missed="${missed.join(",")}">Falsche in den Karteikasten</button>` : ""}<button class="btn primary" data-act="quizAgain">Neues Quiz</button></div></div></div>`;
+}
+
+/* ================= LESSON SESSION (Themen → Lernen) ================= */
+// Introduce the lesson's words one by one, then a mini-quiz in two rounds (recognise, then recall/cloze/article),
+// mixed with a few words learned earlier. Mistakes come back at the end. Then "Nächste Lektion".
+let les = null; // { uid, phase: "intro"|"quiz"|"done", intro: [r], k, quiz }
+function nextUnit(uid) {
+  const u = findUnit(uid); if (!u) return null; const units = unitsOf(u.theme); const i = units.findIndex((x) => x.id === uid);
+  return units.slice(i + 1).find((x) => unitStatus(x).state !== "done") || units[i + 1] || null;
+}
+/** First lesson of the learning-path theme that still has unseen words (for "Weiter mit Lektion N" on Heute). */
+export function pathLesson() {
+  const p = St.S.path; if (p?.mode !== "theme" || !getTheme(p.theme)) return null;
+  const units = unitsOf(p.theme); return units.find((u) => unitStatus(u).seen < u.ranks.length) || units.find((u) => unitStatus(u).state !== "done") || null;
+}
+export function startLesson(uid, { intro = true } = {}) {
+  const u = findUnit(uid); if (!u) { location.hash = "themen"; return; }
+  const added = St.startUnit(u.ranks); getSentences(u.ranks);
+  const words = u.ranks.filter((r) => BY.has(r));
+  les = { uid, phase: intro ? "intro" : "quiz", intro: added.length ? added : words, k: 0, quiz: null };
+  if (!intro) lessonQuiz();
+  if (location.hash !== `#lektion/${uid}`) location.hash = `lektion/${uid}`; else renderLektion(uid);
+}
+function lessonQuiz() {
+  const u = findUnit(les.uid); const words = u.ranks.filter((r) => BY.has(r));
+  const review = shuffle(learnedPool().filter((r) => !words.includes(r))).slice(0, 3);
+  const qs = [...shuffle(words).map((r) => ({ r, stage: 0 })), ...shuffle([...words, ...review]).map((r) => ({ r, stage: 1 }))];
+  const again = new Set();
+  les.quiz = { qs, i: 0, res: [], mode: "lesson", locked: false, pool: [...words, ...learnedPool()].slice(0, 80),
+    requeue: (q) => { const key = q.r + ":" + q.stage; if (again.has(key)) return; again.add(key); les.quiz.qs.push({ r: q.r, stage: q.stage }); } };
+  les.phase = "quiz";
+}
+export function renderLektion(uid) {
+  if (!les || les.uid !== uid) { if (!findUnit(uid)) { location.hash = "themen"; return; } startLesson(uid); return; }
+  leave();
+  const u = findUnit(uid); const t = getTheme(u.theme);
+  const bar = (right) => `<div class="deckbar"><span><b>Lektion ${u.n}</b> · ${esc(t.emoji)} ${esc(u.title || t.name)}</span>${right}<a class="btn ghost" href="#thema/${u.theme}">Beenden</a></div>`;
+  if (les.phase === "intro") {
+    const r = les.intro[les.k]; const w = BY.get(r); const last = les.k === les.intro.length - 1;
+    main().innerHTML = `<div class="deck">${bar(`<span class="small muted mono">${les.k + 1}/${les.intro.length}</span>`)}
+      <div class="dots">${les.intro.map((_, i) => `<i class="${i < les.k ? "ok" : i === les.k ? "cur" : ""}"></i>`).join("")}</div>
+      <div class="panel pad intro">${tile(w, "xl", { photo: true })}<div class="row" style="justify-content:center;gap:8px"><div class="word qword">${wordHTML(w)}</div>${H.spkBtn(sayText(w))}</div>${H.gloss(w, "gloss-big")}
+        <div id="introSent" class="introsent">${H.sentHTML(r)}</div></div>
+      <div class="answer"><button class="btn" data-act="lesPrev" ${les.k ? "" : "disabled"}>← Zurück</button><button class="btn primary" data-act="lesNext">${last ? "Zum Quiz →" : "Weiter →"}</button></div>
+      ${les.k === 0 ? `<button class="btn ghost" data-act="lesSkip">Gleich zum Quiz</button>` : ""}</div>`;
+    attachPhotos(main()); if (!les.spoken?.[les.k]) { (les.spoken ||= {})[les.k] = 1; H.speak(sayText(w)); }
+    return;
+  }
+  if (les.phase === "quiz") {
+    quiz = les.quiz;
+    if (quiz.i >= quiz.qs.length) { les.phase = "done"; St.logPractice(quiz.res.length); return renderLektion(uid); }
+    const q = prepQuestion(quiz.qs[quiz.i], quiz.pool);
+    main().innerHTML = `<div class="deck">${bar("")}${questionHTML(q, quiz.i, quiz.qs.length)}</div>`;
+    afterQuestion(q); return;
+  }
+  const lq = les.quiz; const ok = lq.res.filter(Boolean).length; const nx = nextUnit(uid);
+  const missed = [...new Set(lq.qs.filter((q, i) => !lq.res[i]).map((q) => q.r))];
+  main().innerHTML = `<div class="deck"><div class="panel empty"><div class="big">✓</div><h2>Lektion ${u.n} fertig</h2><p>${ok} von ${lq.res.length} Antworten richtig. Die Wörter liegen jetzt im Karteikasten.</p>
+    ${missedHTML(missed)}
+    <div class="row" style="justify-content:center;flex-wrap:wrap"><a class="btn" href="#thema/${u.theme}">Zum Thema</a><button class="btn" data-quiz-unit="${uid}">Nochmal üben</button>${nx ? `<button class="btn primary" data-unit="${nx.id}">Nächste Lektion →</button>` : `<a class="btn primary" href="#karten">Karteikarten</a>`}</div>
+    ${nx ? `<p class="small muted">Als Nächstes: Lektion ${nx.n}${nx.title ? ` · ${esc(nx.title)}` : ""}</p>` : `<p class="small muted">Das war die letzte Lektion dieses Themas.</p>`}</div></div>`;
 }
 
 /* ================= SCHREIBEN (typed recall, updates the box) ================= */
@@ -398,10 +558,10 @@ function aiThemeSave() {
 export function onClick(t) {
   const d = t.dataset;
   if (d.path) { St.setPath(d.path, d.themeId || ""); H.toast(d.path === "theme" ? `Neue Wörter kommen jetzt aus „${getTheme(d.themeId).name}“` : "Neue Wörter kommen nach Häufigkeit"); location.hash.startsWith("#thema") ? renderThema(d.themeId) : renderThemen(); return true; }
-  if (d.unit) { const u = findUnit(d.unit); const added = St.startUnit(u.ranks); H.toast(added.length ? `${added.length} Wörter zu „Heute“ hinzugefügt` : "Alle Wörter dieser Lektion sind schon im Kasten"); getSentences(added); location.hash = "heute"; return true; }
-  if (d.quizUnit) { const u = findUnit(d.quizUnit); startQuiz(u.ranks, `${getTheme(u.theme).name} · Lektion ${u.n}`); return true; }
+  if (d.unit) { les = null; startLesson(d.unit); return true; }
+  if (d.quizUnit) { les = null; startLesson(d.quizUnit, { intro: false }); return true; }
   if (d.quizTheme) { const seen = themeRanks(d.quizTheme).filter((r) => St.S.learn[r] || St.S.known[r]); startQuiz(seen.length >= 8 ? seen : themeRanks(d.quizTheme).slice(0, 40), getTheme(d.quizTheme).name); return true; }
-  if (d.opt !== undefined && quiz) { answerOpt(Number(d.opt), (right) => { if (quiz.mode === "solo") renderQuiz(); else { const isHost = duel.data.host === cloud.user.uid; const key = isHost ? "pA" : "pB"; const arr = [...(duel.data[key] || []), right ? 1 : 0]; duel.data[key] = arr; drawDuel(); cloud.updateDuel(duel.code, { [key]: arr }).catch(() => H.toast("Antwort nicht gespeichert – Verbindung?")); if (arr.length === duel.data.qs.length) St.logPractice(arr.length); } }); return true; }
+  if (d.opt !== undefined && quiz) { answerOpt(Number(d.opt), (right) => { if (quiz.mode === "solo") renderQuiz(); else if (quiz.mode === "lesson") { if (les) renderLektion(les.uid); } else { const isHost = duel.data.host === cloud.user.uid; const key = isHost ? "pA" : "pB"; const arr = [...(duel.data[key] || []), right ? 1 : 0]; duel.data[key] = arr; drawDuel(); cloud.updateDuel(duel.code, { [key]: arr }).catch(() => H.toast("Antwort nicht gespeichert – Verbindung?")); if (arr.length === duel.data.qs.length) St.logPractice(arr.length); } }); return true; }
   if (d.missed) { d.missed.split(",").map(Number).forEach((r) => St.learnWord(r)); H.toast("In den Karteikasten gelegt"); t.disabled = true; return true; }
   if (d.ins) { const i = $("typeIn"); if (i && !i.disabled) { const p = i.selectionStart ?? i.value.length; i.value = i.value.slice(0, p) + d.ins + i.value.slice(p); i.focus(); i.setSelectionRange(p + 1, p + 1); } return true; }
   if (d.art) { answerArt(d.art); return true; }
@@ -410,6 +570,9 @@ export function onClick(t) {
   if (d.exrounds) { ex.rounds = Number(d.exrounds); renderErklaer(); return true; }
   switch (d.act) {
     case "quizAgain": renderQuizAgain(); return true;
+    case "lesNext": if (les) { if (les.k < les.intro.length - 1) les.k++; else lessonQuiz(); renderLektion(les.uid); } return true;
+    case "lesPrev": if (les && les.k > 0) { les.k--; renderLektion(les.uid); } return true;
+    case "lesSkip": if (les) { lessonQuiz(); renderLektion(les.uid); } return true;
     case "artAgain": art = null; renderArtikel(); return true;
     case "exStart": { const src = $("exSrc")?.value; if (src) ex.src = src; ex.deck = shuffle(exPool()); ex.i = 0; ex.round = 1; ex.cur = 0; ex.teams.forEach((x) => (x.score = 0)); ex.phase = "ready"; renderErklaer(); getSentences(ex.deck.slice(0, 40).filter((r) => r <= 4034)); return true; }
     case "exGo": ex.phase = "play"; ex.left = ex.secs; ex.log = []; leave(); timers.push(setInterval(exTick, 1000)); renderErklaer(); return true;
@@ -430,6 +593,7 @@ export function onClick(t) {
 function renderQuizAgain() { const src = quiz?.src; const pool = quiz ? quiz.qs.map((q) => q.r) : []; quiz = null; if (src && src !== "Gelernte Wörter" && pool.length >= 4) { const p = Object.values(THEME).find((t) => src.startsWith(t.name)); startQuiz(p ? themeRanks(p.id).filter((r) => St.S.learn[r] || St.S.known[r] || pool.includes(r)) : pool, src); } else renderQuiz(); }
 export function onSubmit(e) {
   if (e.target.id === "typeForm") { e.preventDefault(); submitTyping(); return true; }
+  if (e.target.id === "qTypeForm") { e.preventDefault(); submitQuizTyping(() => (quiz?.mode === "lesson" && les ? renderLektion(les.uid) : renderQuiz())); return true; }
   if (e.target.id === "joinForm") { e.preventDefault(); const c = $("joinCode").value.trim().toUpperCase(); if (c.length === 6) location.hash = `duell/${c}`; else H.toast("Der Code hat 6 Zeichen"); return true; }
   return false;
 }
@@ -437,10 +601,17 @@ export function onInput(e) {
   if (e.target.id === "aiThemeReq") { aiTheme.request = e.target.value; return true; } if (e.target.dataset?.team) { ex.teams[Number(e.target.dataset.team)].name = e.target.value || `Team ${Number(e.target.dataset.team) + 1}`; return true; } return false; }
 export function onKey(e, view) {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return false;
-  if ((view === "quiz" || view === "duell") && /^[1-4]$/.test(e.key)) { const b = document.querySelector(`.opt[data-opt="${Number(e.key) - 1}"]`); if (b && !b.disabled) b.click(); return true; }
+  if (view === "lektion" && les?.phase === "intro") {
+    const btn = e.key === "ArrowRight" || (e.key === "Enter" && document.activeElement?.tagName !== "BUTTON") ? "lesNext" : e.key === "ArrowLeft" ? "lesPrev" : "";
+    if (btn) { document.querySelector(`[data-act="${btn}"]:not([disabled])`)?.click(); return true; }
+  }
+  if ((view === "quiz" || view === "duell" || view === "lektion") && /^[1-4]$/.test(e.key)) { const b = document.querySelector(`.opt[data-opt="${Number(e.key) - 1}"]`); if (b && !b.disabled) b.click(); return true; }
   if (view === "artikel" && /^[1-3]$/.test(e.key)) { answerArt(["der", "die", "das"][Number(e.key) - 1]); return true; }
   return false;
 }
 export const pendingDuel = () => duel.code;
 /** Sentences arrived from the AI: refresh the open result panel. */
-export function refreshSentences(view) { if (view === "schreiben" && typing?.result && $("typeRes")) $("typeRes").innerHTML = typeResult(BY.get(typing.r), typing.result); }
+export function refreshSentences(view) {
+  if (view === "schreiben" && typing?.result && $("typeRes")) $("typeRes").innerHTML = typeResult(BY.get(typing.r), typing.result);
+  if (view === "lektion" && les?.phase === "intro" && $("introSent")) $("introSent").innerHTML = H.sentHTML(les.intro[les.k]);
+}

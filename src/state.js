@@ -117,6 +117,8 @@ export function answer(r, good) {
   L.lap = Date.now();
   bump(good ? 2 : 1); save();
 }
+/** Quiz results per word: after two right answers the quizzes ask the word as typed recall. */
+export function quizMark(r, ok) { const L = S.learn[r]; if (!L) return; L.qc = ok ? Math.min((L.qc || 0) + 1, 9) : Math.max(0, (L.qc || 0) - 1); }
 export function retire(r) { delete S.learn[r]; S.known[r] = 1; bump(1); save(); }
 
 // activity: reviews per day, streak, XP

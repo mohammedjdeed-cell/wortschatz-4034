@@ -113,12 +113,16 @@ function startHTML() {
     <div class="panel pad">${levelsHTML()}</div>
     ${cloud.enabled && !cloud.user ? `<div class="note" style="margin-top:12px"><span>Mit Konto wird dein Fortschritt auf allen Geräten gespeichert.</span><button class="btn" data-act="account">Anmelden</button></div>` : ""}`;
 }
+function nextLessonHTML() {
+  const u = Learn.pathLesson(); if (!u) return "";
+  return `<a class="panel pad nextles" href="#lektion/${u.id}"><span class="lbl">Dein Lernweg</span><b>Weiter mit Lektion ${u.n}${u.title ? ` · ${esc(u.title)}` : ""}</b><span class="btn primary">Lernen →</span></a>`;
+}
 function renderHeute() {
   if (!St.S.start) { main.innerHTML = startHTML(); return; }
   const d = new Date(); const s = St.stats();
   main.innerHTML = `<div class="page-head"><div><h1>Heute</h1><p>${d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })} · ${Learn.pathChip()}</p></div>
       <div class="row"><button class="btn" data-act="more">+ ${St.S.goal} Wörter</button><button class="btn primary" data-act="practice">Üben${s.due ? ` · ${s.due}` : ""}</button></div></div>
-    ${statsHTML()}${aiNote()}
+    ${statsHTML()}${nextLessonHTML()}${aiNote()}
     ${St.S.today.ranks.length ? `<ul class="wlist" id="todayList">${St.S.today.ranks.map(wordRow).join("")}</ul>`
       : `<div class="panel empty"><div class="big">🏆</div><h2>Alle 4034 Wörter geschafft</h2><p>Du hast das ganze Wörterbuch durchgearbeitet.</p></div>`}`;
   attachPhotos(main);
@@ -482,10 +486,10 @@ document.addEventListener("pointerout", (e) => { if (e.target.closest?.("[data-t
 Learn.initLearn({ gloss, trW, isAr, spkBtn, speak, toast, sentHTML, openWord });
 
 /* ---------- routing / render ---------- */
-const TAB_OF = { thema: "themen", karten: "ueben", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
+const TAB_OF = { thema: "themen", lektion: "themen", karten: "ueben", schreiben: "ueben", quiz: "ueben", artikel: "ueben", erklaer: "ueben", duell: "ueben" };
 const VIEWS = {
   heute: () => renderHeute(), karten: () => renderKarten(), woerter: () => renderWoerter(), stand: () => renderStand(),
-  themen: () => Learn.renderThemen(), thema: () => Learn.renderThema(viewArg), ueben: () => Learn.renderUeben(),
+  themen: () => Learn.renderThemen(), thema: () => Learn.renderThema(viewArg), lektion: () => Learn.renderLektion(viewArg), ueben: () => Learn.renderUeben(),
   schreiben: () => Learn.renderSchreiben(), quiz: () => Learn.renderQuiz(), artikel: () => Learn.renderArtikel(),
   erklaer: () => Learn.renderErklaer(), duell: () => Learn.renderDuell(viewArg),
 };

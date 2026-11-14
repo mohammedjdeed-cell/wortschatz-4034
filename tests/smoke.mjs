@@ -5,7 +5,7 @@
 import { createRequire } from "module";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const APP = process.env.APP || "http://localhost:4173/";
-const VIEWS = (process.env.VIEWS || "heute,themen,thema/medizin,thema/fsp-arzt,ueben,karten,schreiben,quiz,artikel,erklaer,duell,woerter,stand").split(",");
+const VIEWS = (process.env.VIEWS || "heute,themen,thema/medizin,thema/fsp-arzt,lektion/fsp-arzt~1,ueben,karten,schreiben,quiz,artikel,erklaer,duell,woerter,stand").split(",");
 const SKIP = '[data-act="reset"],[data-act="resetYes"],[data-act="signout"],[data-act="google"],[data-act="export"],[data-photos],[data-act="aiThemeGo"],[data-act="mineTopic"],[data-act="mineCheck"]';
 const SEL = `main button:not([disabled]):not(${SKIP}):not(.flip:not(.flipped) .back button)`;
 const SIZES = [
