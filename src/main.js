@@ -406,7 +406,7 @@ function renderStand() {
       <div class="panel pad"><div class="panel-head"><h2>Aktivität</h2><span class="muted small">26 Wochen</span></div>${heatmap()}</div>
     </div>
   </div>
-  ${cloud.user ? `<div class="section"><h2>Rangliste</h2><div class="panel" id="board"><div style="padding:14px"><div class="skel"></div></div></div></div>` : ""}
+  ${cloud.user ? boardSection() : ""}
   <div class="section"><h2>Einstellungen</h2><ul class="panel settings">
     <li class="stack"><div class="lab"><b>Startniveau</b><span>Ändert nur, wo neue Wörter herkommen. Gelerntes bleibt erhalten.</span></div>${levelsHTML()}</li>
     <li><div class="lab"><b>Übersetzung</b><span>Bedeutungen und Beispielsätze auf Englisch oder Arabisch</span></div><div class="seg"><button data-lang="en">Englisch</button><button data-lang="ar">العربية</button></div></li>
@@ -421,14 +421,24 @@ function renderStand() {
   $("mapHost").appendChild(dictMap());
   if (cloud.user) loadBoard();
 }
-async function loadBoard() {
-  let board = [];
-  try { board = await cloud.leaderboard(); } catch {}
-  const el = $("board"); if (!el) return;
-  if (!board.length) { el.innerHTML = `<p class="muted small" style="margin:0;padding:14px">Noch keine Einträge.</p>`; return; }
-  el.innerHTML = `<ol class="board">${board.map((p, i) => `<li class="${p.id === cloud.user?.uid ? "me" : ""}"><span class="pl">${i + 1}</span><span class="av" style="${p.photo ? `background-image:url('${esc(p.photo)}')` : ""}">${p.photo ? "" : esc((p.name || "?")[0].toUpperCase())}</span><span class="nm">${esc(p.name || "—")}</span><span class="muted small">${p.known || 0} bekannt · Serie ${p.streak || 0}</span><span class="sc">${p.xp || 0}</span></li>`).join("")}</ol>`;
+const myBoardName = () => St.S.board?.name || cloud.user?.displayName || (cloud.user?.email || "").split("@")[0] || "";
+function boardSection() {
+  const on = !!St.S.board?.visible;
+  return `<div class="section"><h2>Rangliste</h2><div class="panel">
+    <ul class="settings"><li><div class="lab"><b>Auf der Rangliste zeigen</b><span>${on ? "Andere angemeldete Lernende sehen deinen Namen, deine Punkte und deine Serie." : "Du bist nicht sichtbar. Die Rangliste siehst du trotzdem."}</span></div><div class="seg"><button data-board="1" aria-pressed="${on}">An</button><button data-board="0" aria-pressed="${!on}">Aus</button></div></li>
+    ${on ? `<li><div class="lab"><b>Anzeigename</b><span>So erscheinst du auf der Rangliste</span></div><form id="boardName" class="row"><input class="input" name="n" maxlength="40" value="${esc(myBoardName())}" style="width:200px"><button class="btn" type="submit">Speichern</button></form></li>` : ""}</ul>
+    <div id="board"><div style="padding:14px"><div class="skel"></div></div></div></div></div>`;
 }
-
+async function loadBoard() {
+  let all = [];
+  try { all = await cloud.leaderboard(); } catch (e) { console.warn(e); }
+  const el = $("board"); if (!el) return;
+  if (!all.length) { el.innerHTML = `<p class="muted small" style="margin:0;padding:14px">Noch niemand auf der Rangliste.${St.S.board?.visible ? "" : " Sei die erste Person – schalte oben „An“."}</p>`; return; }
+  const me = all.findIndex((p) => p.id === cloud.user?.uid);
+  const row = (p, i) => `<li class="${p.id === cloud.user?.uid ? "me" : ""}"><span class="pl">${i + 1}</span><span class="av" style="${p.photo ? `background-image:url('${esc(p.photo)}')` : ""}">${p.photo ? "" : esc((p.name || "?")[0].toUpperCase())}</span><span class="nm">${esc(p.name || "—")}</span><span class="muted small">${p.known || 0} bekannt · Serie ${p.streak || 0}</span><span class="sc">${p.xp || 0}</span></li>`;
+  el.innerHTML = `<ol class="board">${all.slice(0, 20).map(row).join("")}${me >= 20 ? `<li class="gap" aria-hidden="true"><span class="pl">…</span></li>${row(all[me], me)}` : ""}</ol>
+    <p class="muted small" style="margin:0;padding:8px 14px 12px">${all.length} ${all.length === 1 ? "Person" : "Personen"} auf der Rangliste${St.S.board?.visible && me >= 0 ? ` · dein Platz: ${me + 1}` : ""}</p>`;
+}
 /* ---------- account ---------- */
 const GLOGO = `<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>`;
 function renderAvatar() {
@@ -571,6 +581,7 @@ document.addEventListener("click", async (e) => {
   if (t.dataset.goal) { St.S.goal = Number(t.dataset.goal); St.save(); renderStand(); return; }
   if (t.dataset.theme) { const th = t.dataset.theme; if (th === "system") { delete document.documentElement.dataset.theme; try { localStorage.removeItem("wz-theme"); } catch {} } else { document.documentElement.dataset.theme = th; try { localStorage.setItem("wz-theme", th); } catch {} } renderStand(); return; }
   if (t.dataset.photos) { setPhotos(t.dataset.photos === "1"); location.reload(); return; }
+  if (t.dataset.board) { St.S.board = { ...(St.S.board || {}), visible: t.dataset.board === "1", name: St.S.board?.name || myBoardName() }; St.save(); renderStand(); toast(St.S.board.visible ? "Du bist jetzt auf der Rangliste" : "Du bist nicht mehr auf der Rangliste"); setTimeout(loadBoard, 1500); return; }
   if (t.dataset.rate) { rate = Number(t.dataset.rate); lsSet("wz-rate", rate); speak("Guten Tag"); renderStand(); return; }
   const r = Number(t.dataset.r);
   switch (t.dataset.act) {
@@ -607,7 +618,10 @@ document.addEventListener("click", async (e) => {
 });
 $("accountBtn").addEventListener("click", () => openAccount());
 $("helpBtn").addEventListener("click", () => openSheet(helpHTML(view)));
-document.addEventListener("submit", (e) => Learn.onSubmit(e));
+document.addEventListener("submit", (e) => {
+  if (e.target.id === "boardName") { e.preventDefault(); const n = String(new FormData(e.target).get("n") || "").trim().slice(0, 40); if (!n) return toast("Bitte einen Namen eingeben"); St.S.board = { ...(St.S.board || {}), name: n }; St.save(); toast("Name gespeichert"); setTimeout(loadBoard, 1500); return; }
+  Learn.onSubmit(e);
+});
 document.addEventListener("keydown", (e) => {
   if (Learn.onKey(e, view)) return;
   if (view !== "karten" || $("sheet").open || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;

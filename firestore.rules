@@ -10,12 +10,13 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
-    // Public profile card for the leaderboard (readable by signed-in users only).
+    // Leaderboard card, opt-in: exists only while the learner chose "Auf der Rangliste zeigen".
     match /profiles/{uid} {
-      allow read: if signedIn();
+      allow read: if isOwner(uid) || (signedIn() && resource.data.visible == true);
       allow delete: if isOwner(uid);
       allow create, update: if isOwner(uid)
-        && request.resource.data.keys().hasOnly(['name', 'photo', 'known', 'learning', 'streak', 'xp', 'updated'])
+        && request.resource.data.keys().hasOnly(['name', 'photo', 'known', 'learning', 'streak', 'xp', 'visible', 'updated'])
+        && request.resource.data.visible == true
         && shortStr(request.resource.data.name, 60)
         && request.resource.data.known is int && request.resource.data.known <= 50000
         && request.resource.data.learning is int && request.resource.data.learning <= 50000;

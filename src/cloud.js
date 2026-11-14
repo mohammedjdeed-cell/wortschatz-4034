@@ -30,7 +30,7 @@ async function load() {
   return F;
 }
 
-let saveT = null, lastSaved = 0;
+let saveT = null, lastSaved = 0, profileOn = null; // profileOn: last written leaderboard visibility (null = unknown)
 export const cloud = {
   enabled,
   get user() { return user; },
@@ -71,21 +71,27 @@ export const cloud = {
       try {
         lastSaved = S.updated || Date.now();
         await fs.setDoc(fs.doc(db, "users", user.uid), JSON.parse(JSON.stringify(S)));
-        const known = Object.keys(S.known).length, learning = Object.keys(S.learn).length;
-        await fs.setDoc(fs.doc(db, "profiles", user.uid), {
-          name: (user.displayName || (user.email || "Lernende:r").split("@")[0]).slice(0, 60),
-          photo: (user.photoURL || "").slice(0, 500), known, learning,
-          streak: S.streak?.n || 0, xp: S.xp || 0, updated: fs.serverTimestamp(),
-        });
+        // Leaderboard is opt-in: only visible learners have a public profile card.
+        try {
+          const ref = fs.doc(db, "profiles", user.uid);
+          if (S.board?.visible) {
+            await fs.setDoc(ref, {
+              name: (S.board.name || user.displayName || (user.email || "Lernende:r").split("@")[0]).slice(0, 40),
+              photo: (user.photoURL || "").slice(0, 500), known: Object.keys(S.known).length, learning: Object.keys(S.learn).length,
+              streak: S.streak?.n || 0, xp: S.xp || 0, visible: true, updated: fs.serverTimestamp(),
+            });
+            profileOn = true;
+          } else if (profileOn !== false) { await fs.deleteDoc(ref); profileOn = false; }
+        } catch (e) { console.warn("profile save failed (are the latest firestore.rules published?)", e); }
         onState?.("ok");
       } catch (e) { console.warn("save failed", e); onState?.("err"); }
     }, 800);
   },
+  /** Visible learners sorted by XP (filtered by one equality field, so no composite index is needed). */
   async leaderboard() {
     if (!user) return []; const { db, fs } = F;
-    const q = fs.query(fs.collection(db, "profiles"), fs.orderBy("xp", "desc"), fs.limit(20));
-    const snap = await fs.getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const snap = await fs.getDocs(fs.query(fs.collection(db, "profiles"), fs.where("visible", "==", true), fs.limit(1000)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.xp || 0) - (a.xp || 0));
   },
   /* ---------- Wort-Duell (online, two accounts) ---------- */
   async createDuel(code, data) { const { db, fs } = F; await fs.setDoc(fs.doc(db, "duels", code), { ...data, host: user.uid, created: fs.serverTimestamp() }); },
