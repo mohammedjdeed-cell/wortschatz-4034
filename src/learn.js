@@ -16,7 +16,11 @@ const vib = (p) => { try { navigator.vibrate?.(p); } catch {} };
 
 let timers = [], unsub = null;
 /** Called by the router whenever the view changes: stop timers and live listeners. */
-export function leave() { timers.forEach(clearInterval); timers.forEach(clearTimeout); timers = []; if (unsub) { unsub(); unsub = null; } }
+export function leave() {
+  timers.forEach(clearInterval); timers.forEach(clearTimeout); timers = []; if (unsub) { unsub(); unsub = null; }
+  // An answer animation cut short by navigation must never leave a game locked (options would stop responding).
+  if (quiz) quiz.locked = false; if (art) art.locked = false;
+}
 
 /* ================= THEMES ================= */
 function unitStatus(u) {
@@ -115,13 +119,17 @@ function levelPool() {
 const posClass = (w) => (isNoun(w.p) ? "noun" : ["verb", "adj", "adv"].includes(w.p) ? w.p : "other");
 function distractors(r, k) {
   const w = BY.get(r); const cls = posClass(w); const gl = (x) => (H.isAr() ? x.ar || x.e : x.e);
-  const ok = (x) => x && x.r !== r && posClass(x) === cls && gl(x) !== gl(w) && keyOf(x) !== keyOf(w);
-  let cand = themeRanks(themeOf(r)).map((x) => BY.get(x)).filter(ok); // same theme + same word class = plausible traps
-  if (cand.length < k) cand = cand.concat(WORDS.filter((x) => ok(x) && Math.abs(x.r - (r > 4034 ? 1500 : r)) < 600));
-  return shuffle([...new Map(cand.map((x) => [x.r, x])).values()]).slice(0, k).map((x) => x.r);
+  const used = new Set([gl(w)]), keys = new Set([keyOf(w)]), out = [];
+  const take = (list) => { for (const x of shuffle(list)) { if (out.length >= k) return; if (!x || x.r === r || used.has(gl(x)) || keys.has(keyOf(x))) continue; used.add(gl(x)); keys.add(keyOf(x)); out.push(x.r); } };
+  const near = Math.min(r, 3400);
+  take(themeRanks(themeOf(r)).map((x) => BY.get(x)).filter((x) => x && posClass(x) === cls)); // same theme + word class = plausible traps
+  if (out.length < k) take(WORDS.filter((x) => posClass(x) === cls && Math.abs(x.r - (r > 4034 ? 1500 : near)) < 600));
+  if (out.length < k) take(WORDS.filter((x) => posClass(x) === cls));
+  if (out.length < k) take(WORDS); // never fewer than 4 options
+  return out;
 }
 export function makeQuestions(pool, n = 10) {
-  return shuffle(pool).slice(0, n).map((r, i) => ({ r, t: i % 2 ? "tr" : "de", o: shuffle([r, ...distractors(r, 3)]) }));
+  return shuffle([...new Set(pool)].filter((r) => BY.has(r))).slice(0, n).map((r, i) => ({ r, t: i % 2 ? "tr" : "de", o: shuffle([r, ...distractors(r, 3)]) }));
 }
 let quiz = null; // { qs, i, res: [0/1], src, mode: "solo"|"duel", locked }
 function questionHTML(q, i, total) {
@@ -134,9 +142,9 @@ function questionHTML(q, i, total) {
 }
 function answerOpt(k, after) {
   if (!quiz || quiz.locked) return; const q = quiz.qs[quiz.i]; if (!q) return; quiz.locked = true;
-  const right = q.o[k] === q.r; quiz.res.push(right ? 1 : 0); vib(right ? 15 : [30, 40, 30]);
+  const right = q.o[k] === q.r; quiz.res.push(right ? 1 : 0); quiz.i++; vib(right ? 15 : [30, 40, 30]); // count the answer now, even if the user leaves during the animation
   document.querySelectorAll(".opt").forEach((b) => { const idx = Number(b.dataset.opt); if (q.o[idx] === q.r) b.classList.add("right"); else if (idx === k) b.classList.add("wrong"); b.disabled = true; });
-  timers.push(setTimeout(() => { quiz.locked = false; quiz.i++; after(right); }, right ? 650 : 1500));
+  const cur = quiz; timers.push(setTimeout(() => { cur.locked = false; if (quiz === cur) after(right); }, right ? 650 : 1500));
 }
 export function startQuiz(pool, src) {
   leave();
@@ -147,6 +155,7 @@ export function startQuiz(pool, src) {
 export function renderQuiz() {
   if (quiz?.ended) quiz = null; // coming back to #quiz after a finished round starts a new one
   if (!quiz || quiz.mode !== "solo") { const p = learnedPool(); startQuiz(p.length >= 8 ? p : [...p, ...levelPool()], "Gelernte Wörter"); return; }
+  leave(); // a fresh render never has an answer animation pending
   if (quiz.i >= quiz.qs.length) return renderQuizEnd();
   main().innerHTML = `<div class="deck"><div class="deckbar"><span><b>Schnell-Quiz</b> · ${esc(quiz.src)}</span><a class="btn ghost" href="#ueben">Beenden</a></div>${questionHTML(quiz.qs[quiz.i], quiz.i, quiz.qs.length)}</div>`;
 }
@@ -205,6 +214,7 @@ function submitTyping() {
 /* ================= der · die · das ================= */
 let art = null; // { deck, i, ok, streak, best, locked }
 export function renderArtikel() {
+  leave();
   if (!art || art.i >= art.deck.length) {
     if (art && art.i >= art.deck.length) return renderArtikelEnd();
     const single = (r) => { const w = BY.get(r); return w && isNoun(w.p) && !w.p.includes(","); };
@@ -221,10 +231,11 @@ export function renderArtikel() {
 function answerArt(a) {
   if (!art || art.locked) return; const w = BY.get(art.deck[art.i]); const right = w.p.trim() === a; art.locked = true;
   if (right) { art.ok++; art.streak++; art.best = Math.max(art.best, art.streak); } else art.streak = 0;
+  art.i++; const cur = art;
   vib(right ? 15 : [30, 40, 30]);
   document.querySelectorAll(".artbtn").forEach((b) => { if (b.dataset.art === w.p.trim()) b.classList.add("right"); else if (b.dataset.art === a) b.classList.add("wrong"); b.disabled = true; });
   if (!right) H.speak(sayText(w));
-  timers.push(setTimeout(() => { art.locked = false; art.i++; renderArtikel(); }, right ? 500 : 1400));
+  timers.push(setTimeout(() => { cur.locked = false; if (art === cur) renderArtikel(); }, right ? 500 : 1400));
 }
 function renderArtikelEnd() {
   St.logPractice(art.deck.length);

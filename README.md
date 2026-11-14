@@ -87,6 +87,14 @@ npm run dev
 ```
 Without Firebase values, the app runs in local-only mode: progress is kept in localStorage and there is no login. Use `vercel dev` to run the AI function locally as well.
 
+### Smoke test (Playwright)
+```bash
+npx vite build --mode test --outDir /tmp/dist-test
+npx vite preview --port 4173 --outDir /tmp/dist-test &
+node tests/smoke.mjs
+```
+Opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
+
 ## Data model (Firestore)
 | Path | Who | Content |
 |---|---|---|
