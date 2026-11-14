@@ -6,6 +6,9 @@
   "functions": {
     "api/sentences.js": {
       "maxDuration": 60
+    },
+    "api/remind.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -18,7 +21,7 @@
       "destination": "https://wortschatz-4034.firebaseapp.com/__/firebase/:path*"
     },
     {
-      "source": "/((?!api/|__/|assets/|icons/|sw.js|workbox-|manifest.webmanifest).*)",
+      "source": "/((?!api/|__/|assets/|icons/|sw.js|push-sw.js|workbox-|manifest.webmanifest).*)",
       "destination": "/index.html"
     }
   ]

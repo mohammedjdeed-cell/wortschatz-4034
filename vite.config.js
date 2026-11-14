@@ -24,6 +24,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        importScripts: ["push-sw.js"], // daily reminder: push + notificationclick handlers
         navigateFallbackDenylist: [/^\/api\//, /^\/__\//],
         runtimeCaching: [
           { urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//, handler: "StaleWhileRevalidate", options: { cacheName: "fonts" } },

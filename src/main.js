@@ -418,6 +418,7 @@ function renderStand() {
     </div>
   </div>
   ${cloud.user ? boardSection() : ""}
+  ${cloud.user ? `<div class="section"><h2>Erinnerung</h2><div class="panel" id="pushBox">${pushHTML()}</div></div>` : ""}
   <div class="section"><h2>Einstellungen</h2><ul class="panel settings">
     <li class="stack"><div class="lab"><b>Startniveau</b><span>Ändert nur, wo neue Wörter herkommen. Gelerntes bleibt erhalten.</span></div>${levelsHTML()}</li>
     <li><div class="lab"><b>Übersetzung</b><span>Bedeutungen und Beispielsätze auf Englisch oder Arabisch</span></div><div class="seg"><button data-lang="en">Englisch</button><button data-lang="ar">العربية</button></div></li>
@@ -430,7 +431,31 @@ function renderStand() {
     <li><div class="lab"><b>Zurücksetzen</b><span>Löscht deinen gesamten Fortschritt</span></div><div class="row" id="resetBox"><button class="btn danger" data-act="reset">Alles löschen</button></div></li>
   </ul></div>`;
   $("mapHost").appendChild(dictMap());
-  if (cloud.user) loadBoard();
+  if (cloud.user) { loadBoard(); loadPush(); }
+}
+/* ---------- daily reminder ---------- */
+let push = { loaded: false, on: false, hour: 18, busy: false, err: "" };
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+function pushHTML() {
+  if (!cloud.pushReady) return `<p class="muted small" style="margin:0;padding:14px">Tägliche Erinnerungen sind auf diesem Server noch nicht eingerichtet.</p>`;
+  if (isIOS && !standalone()) return `<p class="muted small" style="margin:0;padding:14px">Auf dem iPhone gibt es Erinnerungen nur in der installierten App: Teilen → „Zum Home-Bildschirm“, dann die App von dort öffnen.</p>`;
+  if (!push.loaded) return `<div style="padding:14px"><div class="skel"></div></div>`;
+  return `<ul class="settings"><li><div class="lab"><b>Tägliche Erinnerung</b><span>${push.on ? `Jeden Tag um ${push.hour} Uhr, wenn Karten fällig sind oder deine Serie in Gefahr ist.` : "Eine Nachricht am Tag, nur wenn es etwas zu tun gibt."}</span></div><div class="seg"><button data-push="1" aria-pressed="${push.on}" ${push.busy ? "disabled" : ""}>An</button><button data-push="0" aria-pressed="${!push.on}" ${push.busy ? "disabled" : ""}>Aus</button></div></li>
+    ${push.on ? `<li><div class="lab"><b>Uhrzeit</b></div><select id="pushHour" class="input" style="width:auto">${Array.from({ length: 17 }, (_, i) => i + 6).map((h) => `<option value="${h}" ${h === push.hour ? "selected" : ""}>${h}:00 Uhr</option>`).join("")}</select></li>` : ""}
+    ${push.err ? `<li><div class="note" style="flex:1">${esc(push.err)}</div></li>` : ""}</ul>`;
+}
+const drawPush = () => { const el = $("pushBox"); if (el) el.innerHTML = pushHTML(); };
+async function loadPush() {
+  if (!cloud.pushReady || push.loaded) return drawPush();
+  try { const p = await cloud.pushGet(); push.on = !!p?.on && "Notification" in window && Notification.permission === "granted"; push.hour = p?.hour ?? 18; } catch (e) { console.warn(e); }
+  push.loaded = true; drawPush();
+}
+async function setPush(on) {
+  push.busy = true; push.err = ""; drawPush();
+  try { if (on) await cloud.pushOn(push.hour); else await cloud.pushOff(); push.on = on; toast(on ? `Erinnerung jeden Tag um ${push.hour} Uhr` : "Erinnerung aus"); }
+  catch (e) { console.warn(e); push.err = { denied: "Benachrichtigungen sind blockiert. Erlaube sie in den Browser-Einstellungen für diese Seite.", unsupported: "Dieser Browser unterstützt keine Push-Nachrichten." }[e.message] || "Das hat nicht geklappt – sind die neuesten Firestore-Regeln veröffentlicht?"; }
+  push.busy = false; drawPush();
 }
 const myBoardName = () => St.S.board?.name || cloud.user?.displayName || (cloud.user?.email || "").split("@")[0] || "";
 function boardSection() {
@@ -558,6 +583,7 @@ document.addEventListener("change", (e) => {
     }, 180);
   }
   if (e.target.id === "importFile") importBackup(e.target.files[0]);
+  if (e.target.id === "pushHour") { push.hour = Number(e.target.value); cloud.pushHour(push.hour).then(() => { toast(`Erinnerung um ${push.hour} Uhr`); drawPush(); }).catch(() => toast("Nicht gespeichert – Verbindung?")); }
   if (e.target.dataset?.pi && mine.preview) { mine.preview[Number(e.target.dataset.pi)].checked = e.target.checked; renderPreview(); }
 });
 document.addEventListener("input", (e) => {
@@ -594,6 +620,7 @@ document.addEventListener("click", async (e) => {
   if (t.dataset.goal) { St.S.goal = Number(t.dataset.goal); St.save(); renderStand(); return; }
   if (t.dataset.theme) { const th = t.dataset.theme; if (th === "system") { delete document.documentElement.dataset.theme; try { localStorage.removeItem("wz-theme"); } catch {} } else { document.documentElement.dataset.theme = th; try { localStorage.setItem("wz-theme", th); } catch {} } renderStand(); return; }
   if (t.dataset.photos) { setPhotos(t.dataset.photos === "1"); location.reload(); return; }
+  if (t.dataset.push) { setPush(t.dataset.push === "1"); return; }
   if (t.dataset.board) { St.S.board = { ...(St.S.board || {}), visible: t.dataset.board === "1", name: St.S.board?.name || myBoardName() }; St.save(); renderStand(); toast(St.S.board.visible ? "Du bist jetzt auf der Rangliste" : "Du bist nicht mehr auf der Rangliste"); setTimeout(loadBoard, 1500); return; }
   if (t.dataset.grade) { doAnswer(Number(t.dataset.grade)); return; }
   if (t.dataset.rate) { rate = Number(t.dataset.rate); lsSet("wz-rate", rate); speak("Guten Tag"); renderStand(); return; }
@@ -622,7 +649,7 @@ document.addEventListener("click", async (e) => {
     case "closeSheet": closeSheet(); break;
     case "google": t.disabled = true; try { await cloud.signInGoogle(); closeSheet(); } catch (x) { console.warn(x); openAccount("in", authMsg(x)); } break;
     case "forgot": { const em = document.querySelector('#authForm [name="email"]')?.value; if (!em) { openAccount("in", "Bitte zuerst deine E-Mail-Adresse eintragen."); break; } try { await cloud.resetPassword(em); toast("E-Mail zum Zurücksetzen verschickt"); } catch (x) { openAccount("in", authMsg(x)); } break; }
-    case "signout": await cloud.signOut(); closeSheet(); St.replaceState(St.fresh()); lsSet(LS, St.S); toast("Abgemeldet"); render(); break;
+    case "signout": await cloud.pushForget(); push = { loaded: false, on: false, hour: 18, busy: false, err: "" }; await cloud.signOut(); closeSheet(); St.replaceState(St.fresh()); lsSet(LS, St.S); toast("Abgemeldet"); render(); break;
     case "export": exportBackup(); break;
     case "tourStart": closeSheet(); startTour(); break;
     case "help": openSheet(helpHTML(view)); break;

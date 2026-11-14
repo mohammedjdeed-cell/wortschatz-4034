@@ -22,6 +22,15 @@ service cloud.firestore {
         && request.resource.data.learning is int && request.resource.data.learning <= 50000;
     }
 
+    // Daily reminder: this learner's push tokens, hour and time zone. Read by the server (Admin SDK) in /api/remind.
+    match /push/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['on', 'hour', 'tz', 'tokens', 'last', 'updated'])
+        && request.resource.data.hour is int && request.resource.data.hour >= 0 && request.resource.data.hour <= 23
+        && request.resource.data.tokens.size() <= 10;
+    }
+
     // Wort-Duell: two signed-in players answer the same 10 questions. Readable by code, never listable.
     match /duels/{code} {
       allow get: if signedIn();

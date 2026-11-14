@@ -93,6 +93,32 @@ export const cloud = {
     const snap = await fs.getDocs(fs.query(fs.collection(db, "profiles"), fs.where("visible", "==", true), fs.limit(1000)));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.xp || 0) - (a.xp || 0));
   },
+  /* ---------- daily reminder (web push via Firebase Cloud Messaging) ---------- */
+  pushReady: !!import.meta.env.VITE_FIREBASE_VAPID_KEY,
+  async pushGet() { if (!user || !F) return null; const { db, fs } = F; const s = await fs.getDoc(fs.doc(db, "push", user.uid)); return s.exists() ? s.data() : null; },
+  /** Ask for permission, register this device's token and save the reminder hour. Throws Error("denied" | "unsupported" | …). */
+  async pushOn(hour) {
+    if (!user || !F) throw new Error("auth");
+    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("unsupported");
+    const m = await import("firebase/messaging"); if (!(await m.isSupported())) throw new Error("unsupported");
+    if ((await Notification.requestPermission()) !== "granted") throw new Error("denied");
+    const reg = await navigator.serviceWorker.ready;
+    const token = await m.getToken(m.getMessaging(), { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY, serviceWorkerRegistration: reg });
+    if (!token) throw new Error("token");
+    const { db, fs } = F;
+    await fs.setDoc(fs.doc(db, "push", user.uid), { on: true, hour: Number(hour), tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Berlin", tokens: fs.arrayUnion(token), updated: fs.serverTimestamp() }, { merge: true });
+  },
+  async pushHour(hour) { if (!user || !F) return; const { db, fs } = F; await fs.setDoc(fs.doc(db, "push", user.uid), { hour: Number(hour), tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Berlin", updated: fs.serverTimestamp() }, { merge: true }); },
+  /** On sign-out: stop reminders for this device only (other devices of the account keep theirs). */
+  async pushForget() {
+    if (!user || !F || !import.meta.env.VITE_FIREBASE_VAPID_KEY || !("Notification" in window) || Notification.permission !== "granted") return;
+    try {
+      const m = await import("firebase/messaging"); const reg = await navigator.serviceWorker.ready;
+      const token = await m.getToken(m.getMessaging(), { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY, serviceWorkerRegistration: reg });
+      const { db, fs } = F; if (token) await fs.updateDoc(fs.doc(db, "push", user.uid), { tokens: fs.arrayRemove(token) });
+    } catch {}
+  },
+  async pushOff() { if (!user || !F) return; const { db, fs } = F; await fs.setDoc(fs.doc(db, "push", user.uid), { on: false, updated: fs.serverTimestamp() }, { merge: true }); },
   /* ---------- Wort-Duell (online, two accounts) ---------- */
   async createDuel(code, data) { const { db, fs } = F; await fs.setDoc(fs.doc(db, "duels", code), { ...data, host: user.uid, created: fs.serverTimestamp() }); },
   async getDuel(code) { const { db, fs } = F; const s = await fs.getDoc(fs.doc(db, "duels", code)); return s.exists() ? s.data() : null; },

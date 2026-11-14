@@ -1,0 +1,19 @@
+name: Daily reminders (hourly tick)
+# Calls /api/remind once an hour; the function sends to learners whose chosen hour is now.
+# Setup: repo secret CRON_SECRET (same value as the Vercel env var CRON_SECRET). Skips itself until it is set.
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    permissions: {}
+    env:
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      APP_URL: ${{ vars.APP_URL || 'https://wortschatz-4034.vercel.app' }}
+    steps:
+      - name: Call /api/remind
+        if: ${{ env.CRON_SECRET != '' }}
+        run: curl -fsS --max-time 90 -X POST -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/remind"

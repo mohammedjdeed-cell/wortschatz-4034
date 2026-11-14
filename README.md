@@ -30,6 +30,7 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
 - **Themen:** 22 situational themes with level-ordered lessons, two exam packs (**FSP Arzt** and **FSP Zahnarzt**, Düsseldorf, `src/data/packs.json`, ordered by exam part), and **own themes built by the AI** from any request (e.g. "Fach Zahnarzt – Prothetik").
 - **Sätze** (in Üben): from word to sentence. **Satzbau** (tap the words of the example sentence into order, your word highlighted), **Artikel & Kasus** (fill the article gap: der/den/dem/des …), **Eigener Satz** (write a sentence with the word; the AI corrects it and explains each mistake in EN/AR, API mode `check`), and **Satzmuster** (`src/data/patterns.json`: verb + preposition + case, Nebensätze, Passiv, Konjunktiv II, FSP Anamnese, Aufklärung, Arztbrief). Per word it tracks "sicher im Satz" (`S.used`, 2 points = can use it); the word sheet has "Satz bilden".
 - **Üben:** flashcards, typed recall, quick quiz, der/die/das trainer, Sätze; for two people: Erklär's! (one phone) and Wort-Duell (online).
+- **Erinnerung (daily reminder):** web push via Firebase Cloud Messaging. Fortschritt → Erinnerung: on/off and hour of day. One message a day, only when cards are due or the streak is at risk. On iPhone it only works in the installed app (home screen).
 - **Tutorial:** first-visit welcome with the choice of English or Arabic, a guided spotlight tour, and a "?" help page for every screen (`src/tour.js`).
 - **Translation language:** German ↔ English or German ↔ Arabic (switch in the header). All 4034 words have an Arabic meaning (`src/data/ar.json`); new AI example sentences come with Arabic translations. The dictionary search also accepts Arabic.
 
@@ -78,6 +79,14 @@ The workflow skips itself until `FIREBASE_PROJECT_ID` is set.
    | `ANTHROPIC_MODEL` *(optional)* | defaults to `claude-haiku-5-5` (about $0.50 for the whole dictionary). Set `claude-opus-5-5` for the highest quality (about $13) |
 
 3. Redeploy. Every push to `main` now deploys to production, and every branch or PR gets a preview URL.
+
+### Daily reminders (optional)
+1. Firebase console → **Project settings → Cloud Messaging → Web Push certificates → Generate key pair**. Copy the public key and set it as `VITE_FIREBASE_VAPID_KEY` (Vercel env var, or in `.env.production`; it is public).
+2. Firebase console → **Project settings → Service accounts → Generate new private key**. Paste the whole JSON as the Vercel env var `FIREBASE_SERVICE_ACCOUNT` (secret, server only).
+3. Pick a random string and set it as Vercel env var `CRON_SECRET` **and** as GitHub repo secret `CRON_SECRET`.
+4. Publish the latest `firestore.rules` (they contain `push/{uid}`), then redeploy.
+
+`.github/workflows/remind.yml` calls `POST /api/remind` every hour (Vercel Hobby crons run at most once a day). The function sends to learners whose chosen hour (in their own time zone) is now and who were not reminded today, and drops dead tokens. GitHub pauses scheduled workflows after 60 days without repo activity; re-enable it under Actions if reminders stop.
 4. For the Firebase-hosted build, set `VITE_API_BASE=https://<app>.vercel.app` so that build calls the Vercel AI endpoint.
 
 **AI cost:** sentences are cached in Firestore (`sentences/{rank}`), so all 4034 words are generated at most once in total, not once per user. The function runs at `effort: "low"`, sends up to 12 words per request, and is rate-limited to 30 requests per user per 10 minutes.
@@ -96,7 +105,7 @@ npx vite build --mode test --outDir /tmp/dist-test
 npx vite preview --port 4173 --outDir /tmp/dist-test &
 node tests/smoke.mjs
 ```
-`node tests/saetze.mjs` covers the Sätze modes with a mocked AI. `node tests/fsrs.mjs` checks the scheduling without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
+`node tests/saetze.mjs` covers the Sätze modes with a mocked AI. `node tests/fsrs.mjs` and `node tests/remind.mjs` check scheduling and reminder logic without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
 
 ## Data model (Firestore)
 | Path | Who | Content |
@@ -104,6 +113,7 @@ node tests/smoke.mjs
 | `users/{uid}` | owner only | full learning state (FSRS memory per card `learn[r].f`, known words, daily queue, history, streak, XP) |
 | `profiles/{uid}` | read: owner, or signed-in users when `visible`; write: owner | leaderboard card, **only while the learner opted in** (Fortschritt → Rangliste → "Auf der Rangliste zeigen"): display name, photo, known/learning counts, streak, XP, `visible: true`. Switching off deletes it |
 | `sentences/{rank}` | read: anyone; create-once: signed-in users | AI example sentences + visual hints |
+| `push/{uid}` | owner only (server reads with the Admin SDK) | reminder on/off, hour, time zone, FCM tokens of the learner's devices, last reminder date |
 
 Rules are in `firestore.rules`.
 
