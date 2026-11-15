@@ -483,3 +483,12 @@ select.input { height: 40px; }
 .errlist { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .errlist s { color: var(--die); }
 #ownText { width: 100%; font: 400 1.1rem/1.4 var(--f-word); }
+/* tablets / wide screens in landscape: use the width */
+@media (min-width: 1100px) and (orientation: landscape) {
+  .page, .appbar-inner { max-width: 1320px; }
+  .wlist { display: grid; grid-template-columns: 1fr 1fr; }
+  .wlist .wrow:nth-child(2) { border-top: 0; }
+  .wlist .wrow:nth-child(odd) { border-right: 1px solid var(--line); }
+  .deck { max-width: 760px; }
+}
+@media (orientation: landscape) and (max-height: 520px) { .qcard { min-height: 0; padding: 14px; } .page { padding-top: 12px; } }

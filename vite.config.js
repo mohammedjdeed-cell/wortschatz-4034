@@ -15,6 +15,7 @@ export default defineConfig({
         theme_color: "#18181b",
         background_color: "#f7f7f5",
         display: "standalone",
+        orientation: "any", // rotate freely on tablets and phones (some launchers lock PWAs without this)
         start_url: "/",
         icons: [
           { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
