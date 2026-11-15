@@ -104,7 +104,7 @@ function wordRow(r) {
   return `<li class="wrow${known ? " done" : ""}" data-r="${r}">
     ${tile(w, "", { photo: true })}
     <div class="wmain"><div class="wtitle"><span class="word">${wordHTML(w)}</span>${gloss(w)}</div>${metaHTML(w)}</div>
-    <div class="wactions">${spkBtn(sayText(w))}<label class="check" title="Kenne ich schon – durch ein neues Wort ersetzen"><input type="checkbox" data-know="${r}" ${known ? "checked disabled" : ""}>Kenne ich</label></div>
+    <div class="wactions">${spkBtn(sayText(w))}<label class="check" title="${known ? "Haken entfernen = wieder lernen" : "Kenne ich schon – kommt nicht in den Karteikasten"}"><input type="checkbox" data-know="${r}" ${known ? "checked" : ""}>${known ? "Bekannt ✓" : "Kenne ich"}</label></div>
     <div class="wbody">${sentHTML(r)}</div>
   </li>`;
 }
@@ -422,7 +422,7 @@ function renderStand() {
   <div class="section"><h2>Einstellungen</h2><ul class="panel settings">
     <li class="stack"><div class="lab"><b>Startniveau</b><span>Ändert nur, wo neue Wörter herkommen. Gelerntes bleibt erhalten.</span></div>${levelsHTML()}</li>
     <li><div class="lab"><b>Übersetzung</b><span>Bedeutungen und Beispielsätze auf Englisch oder Arabisch</span></div><div class="seg"><button data-lang="en">Englisch</button><button data-lang="ar">العربية</button></div></li>
-    <li><div class="lab"><b>Neue Wörter pro Tag</b></div><div class="seg">${[5, 10, 15, 20].map((n) => `<button data-goal="${n}" aria-pressed="${St.S.goal === n}">${n}</button>`).join("")}</div></li>
+    <li><div class="lab"><b>Neue Wörter pro Tag</b></div><div class="seg">${[5, 10, 15, 20, 30].map((n) => `<button data-goal="${n}" aria-pressed="${St.S.goal === n}">${n}</button>`).join("")}</div></li>
     <li><div class="lab"><b>Darstellung</b></div><div class="seg">${[["system", "System"], ["light", "Hell"], ["dark", "Dunkel"]].map(([k2, l2]) => `<button data-theme="${k2}" aria-pressed="${theme === k2}">${l2}</button>`).join("")}</div></li>
     <li><div class="lab"><b>Fotos bei Nomen</b><span>Bilder von Wikipedia</span></div><div class="seg"><button data-photos="1" aria-pressed="${photosOn}">An</button><button data-photos="0" aria-pressed="${!photosOn}">Aus</button></div></li>
     <li><div class="lab"><b>Sprechtempo</b></div><div class="seg">${[[0.7, "Langsam"], [0.9, "Normal"], [1.05, "Schnell"]].map(([v, l2]) => `<button data-rate="${v}" aria-pressed="${rate === v}">${l2}</button>`).join("")}</div></li>
@@ -574,13 +574,11 @@ addEventListener("hashchange", route);
 document.addEventListener("change", (e) => {
   const r = Number(e.target.dataset?.know);
   if (r) {
-    const row = e.target.closest(".wrow"); row.classList.add("leaving");
-    setTimeout(() => {
-      const nr = St.markKnown(r);
-      if (nr) { row.outerHTML = wordRow(nr); const c = document.querySelector(`.wrow[data-r="${nr}"]`); c?.classList.add("arriving"); attachPhotos(c); getSentences([nr, ...St.peek(4)]); } else row.remove();
-      $("stats").outerHTML = statsHTML();
-      toast(`„${BY.get(r).w}“ als bekannt markiert`);
-    }, 180);
+    const row = e.target.closest(".wrow"); const on = e.target.checked;
+    if (on) St.markKnown(r); else St.unmarkKnown(r);
+    row.outerHTML = wordRow(r); attachPhotos(document.querySelector(`.wrow[data-r="${r}"]`));
+    $("stats").outerHTML = statsHTML();
+    toast(on ? `„${BY.get(r).w}“ als bekannt markiert – bleibt in deiner Liste` : `„${BY.get(r).w}“ wieder im Karteikasten`);
   }
   if (e.target.id === "importFile") importBackup(e.target.files[0]);
   if (e.target.id === "pushHour") { push.hour = Number(e.target.value); cloud.pushHour(push.hour).then(() => { toast(`Erinnerung um ${push.hour} Uhr`); drawPush(); }).catch(() => toast("Nicht gespeichert – Verbindung?")); }

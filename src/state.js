@@ -86,15 +86,8 @@ export function ensureToday() {
   const nr = pull(S.goal || 10); S.today.ranks = nr; addLearn(nr); save();
   return true;
 }
-export function markKnown(r) {
-  delete S.learn[r]; S.known[r] = 1;
-  const i = S.today.ranks.indexOf(r); let nr = null;
-  if (i >= 0) {
-    const n = pull(1);
-    if (n.length) { nr = n[0]; S.today.ranks.splice(i, 1, nr); addLearn([nr]); } else S.today.ranks.splice(i, 1);
-  }
-  bump(1); save(); return nr;
-}
+/** "Kenne ich": the word leaves the card box but stays in today's list (marked), so the day keeps its size. */
+export function markKnown(r) { delete S.learn[r]; S.known[r] = 1; bump(1); save(); }
 export function unmarkKnown(r) { delete S.known[r]; addLearn([r]); save(); }
 export function learnWord(r) { if (S.known[r]) delete S.known[r]; addLearn([r]); save(); }
 /** Put a lesson's words into today's list and the box (skips words already known or in the box). */

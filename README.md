@@ -10,7 +10,7 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
 | AI | Vercel Serverless Function `api/sentences.js` → Claude API | Writes example sentences, emoji, plural, conjugation, synonyms and antonyms. Each word is generated **once** and cached in Firestore for all users |
 
 ## Features
-- **Heute (Today):** your daily words, each with a visual tile. Tick a word you already know and a new one takes its place.
+- **Heute (Today):** your daily words, each with a visual tile. Tick a word you already know ("Kenne ich"): it stays in today's list marked as known and skips the card box, so the day keeps its size (5/10/15/20/30 words); untick to undo. "+ N Wörter" adds more.
 - **Karten (Flashcards):** 3D flip cards in three modes: DE → EN, EN → DE, and **Bild → DE** (picture to German). Rate each card **Nochmal / Schwer / Gut / Leicht** (keys 1–4, ← / →, or swipe); each button shows when the card comes back. Scheduling is **FSRS** (`ts-fsrs`, target retention 90 %, fuzz on): every word has its own stability and difficulty. Existing Leitner boxes were migrated on first review (stability = old box interval). Learning steps (1–10 min) keep a card in today's deck; due dates are day-based.
 - **Wörter (Dictionary):** search all 4034 words in German or English, or by `#rank`. Filter by part of speech and learning status. Each word opens in a detail sheet.
 - **Fortschritt (Progress):** a 4034-cell dictionary map, memory chart (cards by FSRS stability), activity heatmap, streak, XP, an opt-in leaderboard (editable display name, top 20 plus your own rank), settings, and JSON backup/restore.
@@ -105,7 +105,7 @@ npx vite build --mode test --outDir /tmp/dist-test
 npx vite preview --port 4173 --outDir /tmp/dist-test &
 node tests/smoke.mjs
 ```
-`node tests/saetze.mjs` covers the Sätze modes with a mocked AI. `node tests/fsrs.mjs` and `node tests/remind.mjs` check scheduling and reminder logic without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
+`node tests/known.mjs` checks "Kenne ich" (word stays, undo). `node tests/saetze.mjs` covers the Sätze modes with a mocked AI. `node tests/fsrs.mjs` and `node tests/remind.mjs` check scheduling and reminder logic without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
 
 ## Data model (Firestore)
 | Path | Who | Content |

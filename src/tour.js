@@ -31,8 +31,8 @@ const STEPS = [
     "Heute: words done today out of your goal. Fällig: cards due for review. Serie: days in a row. Am Lernen: words in your card box. Bekannt: words you already know.",
     "Heute: ما أنجزته اليوم من هدفك. Fällig: البطاقات المستحقة للمراجعة. Serie: عدد الأيام المتتالية. Am Lernen: الكلمات في صندوق البطاقات. Bekannt: الكلمات التي تعرفها.") },
   { view: "heute", sel: ".wrow", when: () => !!St.S.start, t: T("One word, everything you need", "كل ما تحتاجه عن الكلمة"), b: T(
-    "Picture or diagram, the article in colour (der blue · die red · das yellow), meaning and frequency. 🔊 reads it aloud. ‘Kenne ich’ means you already know it – it is replaced by a new word at once. Underneath: an everyday sentence and a clinical sentence (KLINIK).",
-    "صورة أو رسم توضيحي، وأداة التعريف بلون مميز (der أزرق · die أحمر · das أصفر)، والمعنى ومدى شيوع الكلمة. زر 🔊 ينطق الكلمة. زر ‹Kenne ich› يعني أنك تعرفها فتُستبدل فورًا بكلمة جديدة. وفي الأسفل جملة يومية وجملة من سياق المستشفى (KLINIK).") },
+    "Picture or diagram, the article in colour (der blue · die red · das yellow), meaning and frequency. 🔊 reads it aloud. ‘Kenne ich’ means you already know it – it stays in today's list, marked, but skips the card box (untick to undo). Underneath: an everyday sentence and a clinical sentence (KLINIK).",
+    "صورة أو رسم توضيحي، وأداة التعريف بلون مميز (der أزرق · die أحمر · das أصفر)، والمعنى ومدى شيوع الكلمة. زر 🔊 ينطق الكلمة. زر ‹Kenne ich› يعني أنك تعرفها، فتبقى في قائمة اليوم مع علامة لكنها لا تدخل صندوق البطاقات (أزل العلامة للتراجع). وفي الأسفل جملة يومية وجملة من سياق المستشفى (KLINIK).") },
   { view: "heute", sel: '[data-act="practice"]', when: () => !!St.S.start, t: T("Review and more words", "المراجعة والمزيد من الكلمات"), b: T(
     "‘Üben’ opens your due flashcards. ‘+10 Wörter’ gives you ten more new words today. Under the date you see your ‘Lernweg’ – where new words come from.",
     "زر ‹Üben› يفتح بطاقات المراجعة المستحقة. زر ‹+10 Wörter› يضيف عشر كلمات جديدة اليوم. وتحت التاريخ ترى ‹Lernweg›، أي مصدر كلماتك الجديدة.") },
@@ -115,7 +115,7 @@ export function welcomeHTML() {
 const HELP = {
   heute: { t: T("Heute – today's words", "Heute – كلمات اليوم"), items: [
     ["Wo möchtest du anfangen? (A1–C1)", T("Choose where in the frequency list you start. Only needed once.", "اختر من أين تبدأ في قائمة الكلمات حسب الشيوع. مرة واحدة فقط.")],
-    ["Kenne ich", T("You already know the word: it goes to ‘Bekannt’ and a new word takes its place.", "تعرف الكلمة: تنتقل إلى ‹Bekannt› وتحل محلها كلمة جديدة.")],
+    ["Kenne ich", T("You already know the word: it is marked ‘Bekannt’ and stays in today's list – no replacement, your day keeps its size. Want more words? ‘+ N Wörter’.", "تعرف الكلمة: تُعلَّم ‹Bekannt› وتبقى في قائمة اليوم دون استبدال، فيبقى عدد كلمات يومك كما هو. تريد كلمات أكثر؟ اضغط ‹+ N Wörter›.")],
     ["🔊", T("Reads the word or sentence aloud (German voice of your device). Speed under Fortschritt → Sprechtempo.", "ينطق الكلمة أو الجملة بصوت ألماني من جهازك. يمكن تغيير السرعة من Fortschritt → Sprechtempo.")],
     ["+ 10 Wörter", T("Ten more new words for today.", "عشر كلمات جديدة إضافية لليوم.")],
     ["Üben · N", T("Opens the flashcards that are due now (N).", "يفتح البطاقات المستحقة الآن (N).")],
