@@ -6,6 +6,7 @@ import * as AI from "./ai.js";
 import { cloud } from "./cloud.js";
 import * as Learn from "./learn.js";
 import * as Saetze from "./saetze.js";
+import * as Voice from "./voice.js";
 import { startTour, tourSeen, welcomeHTML, helpHTML } from "./tour.js";
 import { esc, keyOf, wordHTML, posLabel, isNoun, tile, freqHTML, caseOf, attachPhotos, sayText, hasPicture, photosOn, setPhotos } from "./visuals.js";
 
@@ -32,15 +33,27 @@ function setSync(s) {
 }
 
 /* ---------- speech ---------- */
-const canSpeak = "speechSynthesis" in window;
 let rate = lsGet("wz-rate") || 0.9;
-function speak(t) {
-  if (!canSpeak) return;
-  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "de-DE"; u.rate = rate;
-    const v = speechSynthesis.getVoices().find((v) => v.lang?.startsWith("de")); if (v) u.voice = v; speechSynthesis.speak(u); } catch {}
+const speak = (t) => Voice.say(t, rate);
+const SAMPLE = "Guten Tag. Seit wann haben Sie diese Beschwerden?";
+function voiceRow() {
+  if (!Voice.canSpeak) return "";
+  const list = Voice.germanVoices(); const cur = Voice.chosenVoice();
+  if (!list.length) return `<li class="stack"><div class="lab"><b>Stimme</b><span>Auf diesem Gerät ist keine deutsche Stimme installiert. ${voiceTip()}</span></div></li>`;
+  const good = list.some(Voice.naturalLabel);
+  return `<li class="stack"><div class="lab"><b>Stimme</b><span>Natürliche Stimmen stehen oben (★).${good ? "" : " " + voiceTip()}</span></div>
+    <div class="row"><select id="voiceSel" class="input" style="flex:1;min-width:0">${list.map((v) => `<option value="${esc(v.voiceURI)}" ${v === cur ? "selected" : ""}>${Voice.naturalLabel(v) ? "★ " : ""}${esc(v.name)} (${esc(v.lang)})</option>`).join("")}</select><button class="btn" data-act="voiceTest">▶ Probe</button></div></li>`;
 }
+function voiceTip() {
+  const ua = navigator.userAgent;
+  if (/Android/i.test(ua)) return "Tipp: Android-Einstellungen → Text-in-Sprache → bevorzugte Engine „Google“ → Deutsch (Deutschland) → Stimme mit hoher Qualität herunterladen.";
+  if (/iPhone|iPad|Mac/i.test(ua)) return "Tipp: Einstellungen → Bedienungshilfen → Gesprochene Inhalte → Stimmen → Deutsch → eine „Premium“- oder „Erweitert“-Stimme laden.";
+  if (/Windows/i.test(ua) && !/Edg\//.test(ua)) return "Tipp: In Microsoft Edge gibt es sehr natürliche Stimmen (Katja, Conrad, Seraphina).";
+  return "";
+}
+Voice.onVoices(() => { if (view === "stand" && $("voiceSel") === null && Voice.germanVoices().length) renderStand(); });
 const SPK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>`;
-const spkBtn = (text, cls = "") => (canSpeak ? `<button class="icon-btn ${cls}" data-say="${esc(text)}" aria-label="Vorlesen" title="Vorlesen">${SPK}</button>` : "");
+const spkBtn = (text, cls = "") => (Voice.canSpeak ? `<button class="icon-btn ${cls}" data-say="${esc(text)}" aria-label="Vorlesen" title="Vorlesen">${SPK}</button>` : "");
 
 /* ---------- translation language (English or Arabic) ---------- */
 const isAr = () => St.S.lang === "ar";
@@ -425,6 +438,7 @@ function renderStand() {
     <li><div class="lab"><b>Neue Wörter pro Tag</b></div><div class="seg">${[5, 10, 15, 20, 30].map((n) => `<button data-goal="${n}" aria-pressed="${St.S.goal === n}">${n}</button>`).join("")}</div></li>
     <li><div class="lab"><b>Darstellung</b></div><div class="seg">${[["system", "System"], ["light", "Hell"], ["dark", "Dunkel"]].map(([k2, l2]) => `<button data-theme="${k2}" aria-pressed="${theme === k2}">${l2}</button>`).join("")}</div></li>
     <li><div class="lab"><b>Fotos bei Nomen</b><span>Bilder von Wikipedia</span></div><div class="seg"><button data-photos="1" aria-pressed="${photosOn}">An</button><button data-photos="0" aria-pressed="${!photosOn}">Aus</button></div></li>
+    ${voiceRow()}
     <li><div class="lab"><b>Sprechtempo</b></div><div class="seg">${[[0.7, "Langsam"], [0.9, "Normal"], [1.05, "Schnell"]].map(([v, l2]) => `<button data-rate="${v}" aria-pressed="${rate === v}">${l2}</button>`).join("")}</div></li>
     <li><div class="lab"><b>Einführung</b><span>Tour durch die App · Tour · جولة تعريفية</span></div><div class="row"><button class="btn" data-act="help">Hilfe zu dieser Seite</button><button class="btn primary" data-act="tourStart">Tour starten</button></div></li>
     <li><div class="lab"><b>Sicherung</b><span>Fortschritt als Datei speichern oder wiederherstellen</span></div><div class="row"><button class="btn" data-act="export">Exportieren</button><label class="btn">Importieren<input type="file" accept="application/json" id="importFile" hidden></label></div></li>
@@ -581,6 +595,7 @@ document.addEventListener("change", (e) => {
     toast(on ? `„${BY.get(r).w}“ als bekannt markiert – bleibt in deiner Liste` : `„${BY.get(r).w}“ wieder im Karteikasten`);
   }
   if (e.target.id === "importFile") importBackup(e.target.files[0]);
+  if (e.target.id === "voiceSel") { Voice.setVoice(e.target.value); speak(SAMPLE); }
   if (e.target.id === "pushHour") { push.hour = Number(e.target.value); cloud.pushHour(push.hour).then(() => { toast(`Erinnerung um ${push.hour} Uhr`); drawPush(); }).catch(() => toast("Nicht gespeichert – Verbindung?")); }
   if (e.target.dataset?.pi && mine.preview) { mine.preview[Number(e.target.dataset.pi)].checked = e.target.checked; renderPreview(); }
 });
@@ -648,6 +663,7 @@ document.addEventListener("click", async (e) => {
     case "google": t.disabled = true; try { await cloud.signInGoogle(); closeSheet(); } catch (x) { console.warn(x); openAccount("in", authMsg(x)); } break;
     case "forgot": { const em = document.querySelector('#authForm [name="email"]')?.value; if (!em) { openAccount("in", "Bitte zuerst deine E-Mail-Adresse eintragen."); break; } try { await cloud.resetPassword(em); toast("E-Mail zum Zurücksetzen verschickt"); } catch (x) { openAccount("in", authMsg(x)); } break; }
     case "signout": await cloud.pushForget(); push = { loaded: false, on: false, hour: 18, busy: false, err: "" }; await cloud.signOut(); closeSheet(); St.replaceState(St.fresh()); lsSet(LS, St.S); toast("Abgemeldet"); render(); break;
+    case "voiceTest": speak(SAMPLE); break;
     case "export": exportBackup(); break;
     case "tourStart": closeSheet(); startTour(); break;
     case "help": openSheet(helpHTML(view)); break;

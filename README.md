@@ -21,7 +21,7 @@ Ten German words a day from *A Frequency Dictionary of German* (Jones & Tschirne
   - Dot grids for numbers.
   - Colour coding for der, die and das.
   - A frequency meter.
-- German text-to-speech for words and sentences.
+- German text-to-speech for words and sentences (`src/voice.js`): uses the most natural German voice the device offers (Edge "Natural", Google, Apple "Premium/Enhanced" ranked above compact voices), changeable under Fortschritt → Einstellungen → Stimme, with a tip on how to install better voices.
 - **Meine Wörter (own words):**
   - Type your own words (any spelling, with or without article). Each word is matched against the 4034-word dictionary first; the AI fills in the rest.
   - Or ask for a topic ("Körper", "Kardiologie", "Technik") and the AI suggests words at your level. Words already in the dictionary are linked to it rather than duplicated.
@@ -105,7 +105,7 @@ npx vite build --mode test --outDir /tmp/dist-test
 npx vite preview --port 4173 --outDir /tmp/dist-test &
 node tests/smoke.mjs
 ```
-`node tests/known.mjs` checks "Kenne ich" (word stays, undo). `node tests/saetze.mjs` covers the Sätze modes with a mocked AI. `node tests/fsrs.mjs` and `node tests/remind.mjs` check scheduling and reminder logic without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
+`node tests/voice.mjs` checks the voice choice. `node tests/known.mjs` checks "Kenne ich" (word stays, undo). `node tests/saetze.mjs` covers the Sätze modes with a mocked AI. `node tests/fsrs.mjs` and `node tests/remind.mjs` check scheduling and reminder logic without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
 
 ## Data model (Firestore)
 | Path | Who | Content |
