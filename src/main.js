@@ -77,7 +77,7 @@ function sentHTML(r, { full = true } = {}) {
     if (full && s.ant) ex.push(`<span>Gegenteil: <b>${esc(s.ant)}</b></span>`);
     return (ex.length ? `<div class="extra">${ex.join("")}</div>` : "")
       + `<div class="sent"><span class="de">${esc(s.de)} ${spkBtn(s.de, "sm")}</span>${sTr(s, "s")}</div>`
-      + (s.kde && full ? `<div class="sent"><span class="lbl">Klinik</span><span class="de">${esc(s.kde)}</span>${sTr(s, "k")}</div>` : "");
+      + (s.kde && full ? `<div class="sent"><span class="lbl">Klinik</span><span class="de">${esc(s.kde)} ${spkBtn(s.kde, "sm")}</span>${sTr(s, "k")}</div>` : "");
   }
   if (pending.has(r)) return `<div><div class="skel"></div><div class="skel s2"></div></div>`;
   return "";
