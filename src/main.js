@@ -7,6 +7,7 @@ import { cloud } from "./cloud.js";
 import * as Learn from "./learn.js";
 import * as Saetze from "./saetze.js";
 import * as Voice from "./voice.js";
+import { search } from "./search.js";
 import { startTour, tourSeen, welcomeHTML, helpHTML } from "./tour.js";
 import { esc, keyOf, wordHTML, posLabel, isNoun, tile, freqHTML, caseOf, attachPhotos, sayText, hasPicture, photosOn, setPhotos } from "./visuals.js";
 
@@ -222,27 +223,26 @@ function bindSwipe() {
 
 /* ---------- Wörter ---------- */
 const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ß/g, "ss");
-const normAr = (s) => (s || "").replace(/[\u064B-\u065F\u0670\u0640]/g, "").replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه");
-const IDX = new Map();
-const idx = (w) => { let x = IDX.get(w.r); if (!x || x.src !== w) { x = { src: w, de: norm(w.w), en: norm(w.e), ar: normAr(w.ar) }; IDX.set(w.r, x); } return x; };
+let HINT = new Map(); // why a word matched the search (e.g. "Plural"), shown next to the result
 function filtered() {
-  const q = norm(dict.q.trim()); const num = /^#?\d+$/.test(q) ? Number(q.replace("#", "")) : 0;
-  const qa = normAr(dict.q.trim());
-  return [...WORDS, ...St.packWords(), ...customWords()].filter((w) => {
+  const raw = dict.q.trim(); const num = /^#?\d+$/.test(raw) ? Number(raw.replace("#", "")) : 0;
+  const pool = [...WORDS, ...St.packWords(), ...customWords()].filter((w) => {
     if (dict.pos === "mine") { if (!w.custom) return false; }
     else if (dict.pos !== "all") {
       if (dict.pos === "noun" ? !isNoun(w.p) : dict.pos === "other" ? isNoun(w.p) || ["verb", "adj", "prep"].includes(w.p) : w.p !== dict.pos) return false;
     }
     if (dict.st !== "all") { const s = St.wordState(w.r); if (dict.st === "learn" ? !(s === "learn" || s === "today") : s !== dict.st) return false; }
-    if (!q) return true;
-    if (num) return w.r === num;
-    const x = idx(w); return x.de.includes(q) || x.en.includes(q) || (qa && x.ar.includes(qa));
+    return true;
   });
+  HINT = new Map();
+  if (!raw) return pool;
+  if (num) return pool.filter((w) => w.r === num);
+  return search(pool, raw).map(({ w, hint }) => { if (hint) HINT.set(w.r, hint); return w; });
 }
 function itemHTML(w) {
   const s = St.wordState(w.r);
   const label = { new: "neu", learn: "am Lernen", today: "heute", known: "bekannt" }[s];
-  return `<li><button class="item" data-open="${w.r}">${tile(w)}<div><div class="w">${wordHTML(w)}</div>${gloss(w, "e")}</div><span class="rank">${w.custom ? "eigen" : w.pack ? "FSP" : "#" + w.r}</span><span class="dot ${s}" title="${label}"></span></button></li>`;
+  return `<li><button class="item" data-open="${w.r}">${tile(w)}<div><div class="w">${wordHTML(w)}</div>${gloss(w, "e")}</div>${HINT.get(w.r) ? `<span class="badge">${esc(HINT.get(w.r))}</span>` : ""}<span class="rank">${w.custom ? "eigen" : w.pack ? "FSP" : "#" + w.r}</span><span class="dot ${s}" title="${label}"></span></button></li>`;
 }
 function wordsHead(active) {
   return `<div class="page-head"><div><h1>${active === "mine" ? "Meine Wörter" : "Wörterbuch"}</h1><p>${active === "mine" ? "Eigene Wörter und KI-Wortlisten. Was schon im Wörterbuch steht, wird automatisch zugeordnet." : `${MAXR.toLocaleString("de-DE")} Wörter, nach Häufigkeit geordnet.`}</p></div>
