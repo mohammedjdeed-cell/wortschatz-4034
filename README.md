@@ -107,6 +107,9 @@ node tests/smoke.mjs
 ```
 `node tests/search.mjs` checks search quality on the real word list. `node tests/voice.mjs` checks the voice choice. `node tests/known.mjs` checks "Kenne ich" (word stays, undo). `node tests/saetze.mjs` covers the Sätze modes with a mocked AI. `node tests/fsrs.mjs` and `node tests/remind.mjs` check scheduling and reminder logic without a browser. `node tests/lesson.mjs` walks a lesson (intro → all quiz types → next lesson → Heute link → typing) with a mocked AI. `tests/smoke.mjs` opens every view on a phone (412×915) and a laptop (1440×900), clicks every visible button once and fails on page errors or an empty page. `VIEWS=quiz,artikel node tests/smoke.mjs` limits it to some views.
 
+## Windows app (.exe)
+`src-tauri/` is a minimal [Tauri 2](https://tauri.app) shell: a native Windows window (WebView2) that shows the live app, so it always has the newest version, the same account, sync and AI. The installer (~1.5 MB) is built on GitHub Actions (`.github/workflows/desktop.yml`): **Actions → Windows desktop app → Run workflow**, enter a version (e.g. `2.0.1`) to publish a GitHub Release with `…_x64-setup.exe` and `.msi`; leave it empty to only build. Only changes to `src-tauri/` need a new installer; app changes arrive by themselves. The installer is unsigned, so SmartScreen shows "Unbekannter Herausgeber" → "Weitere Informationen" → "Trotzdem ausführen".
+
 ## Data model (Firestore)
 | Path | Who | Content |
 |---|---|---|
