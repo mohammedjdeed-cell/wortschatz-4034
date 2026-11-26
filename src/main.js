@@ -489,6 +489,24 @@ async function loadBoard() {
   el.innerHTML = `<ol class="board">${all.slice(0, 20).map(row).join("")}${me >= 20 ? `<li class="gap" aria-hidden="true"><span class="pl">…</span></li>${row(all[me], me)}` : ""}</ol>
     <p class="muted small" style="margin:0;padding:8px 14px 12px">${all.length} ${all.length === 1 ? "Person" : "Personen"} auf der Rangliste${St.S.board?.visible && me >= 0 ? ` · dein Platz: ${me + 1}` : ""}</p>`;
 }
+/* ---------- Google sign-in for the Windows app (runs in the normal browser) ---------- */
+let desk = { busy: false, done: false, err: "" };
+function renderDeskLogin(arg) {
+  const [port, state] = String(arg || "").split("~");
+  if (!/^\d+$/.test(port || "") || !state) { main.innerHTML = `<div class="deck"><div class="panel empty"><h2>Ungültiger Link</h2><p>Starte die Anmeldung bitte erneut in der Windows-App.</p></div></div>`; return; }
+  main.innerHTML = `<div class="deck"><div class="panel empty"><div class="big">${desk.done ? "✓" : "🖥️"}</div><h2>${desk.done ? "Angemeldet" : "Anmeldung für die Windows-App"}</h2>
+    <p>${desk.done ? "Du bist jetzt auch in der Windows-App angemeldet. Dieses Fenster kannst du schließen." : "Google erlaubt die Anmeldung nur im Browser. Melde dich hier an – die Windows-App übernimmt die Anmeldung automatisch."}</p>
+    ${desk.done ? "" : `<button class="btn block gbtn" data-act="deskGoogle" ${desk.busy ? "disabled" : ""}>${GLOGO} ${desk.busy ? "Wird angemeldet …" : "Mit Google anmelden"}</button>
+    <p class="small muted">Fragt der Browser, ob die Seite auf Geräte im lokalen Netzwerk zugreifen darf: <b>Zulassen</b> – so erreicht die Anmeldung die App auf diesem PC.</p>`}
+    ${desk.err ? `<div class="note">${esc(desk.err)}</div>` : ""}</div></div>`;
+}
+async function deskGoogle() {
+  const [port, state] = viewArg.split("~"); desk = { busy: true, done: false, err: "" }; renderDeskLogin(viewArg);
+  try { await cloud.googleHandoff(port, state); desk = { busy: false, done: true, err: "" }; }
+  catch (x) { console.warn(x); desk = { busy: false, done: false, err: x?.message === "handoff" || x instanceof TypeError ? "Die Windows-App war nicht erreichbar. Ist sie noch geöffnet? Starte die Anmeldung dort bitte erneut." : authMsg(x) }; }
+  renderDeskLogin(viewArg);
+}
+
 /* ---------- account ---------- */
 const GLOGO = `<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>`;
 function renderAvatar() {
@@ -525,7 +543,7 @@ const authMsg = (e) => ({
   "auth/invalid-credential": "E-Mail oder Passwort ist falsch.", "auth/email-already-in-use": "Diese E-Mail ist schon registriert.",
   "auth/weak-password": "Das Passwort braucht mindestens 6 Zeichen.", "auth/too-many-requests": "Zu viele Versuche. Bitte später erneut.",
   "auth/popup-closed-by-user": "Das Google-Fenster wurde geschlossen.", "auth/cancelled-popup-request": "Anmeldung abgebrochen.",
-  "auth/unauthorized-domain": "Diese Adresse ist in Firebase nicht freigegeben.", "auth/network-request-failed": "Keine Verbindung.",
+  "auth/unauthorized-domain": "Diese Adresse ist in Firebase nicht freigegeben.", "auth/network-request-failed": "Keine Verbindung.", "auth/timeout": "Die Anmeldung im Browser wurde nicht abgeschlossen.",
 })[e?.code] || "Anmeldung fehlgeschlagen (" + (e?.code || e?.message || e) + ").";
 
 /* ---------- sheet, toast, tooltip ---------- */
@@ -552,6 +570,7 @@ const VIEWS = {
   heute: () => renderHeute(), karten: () => renderKarten(), woerter: () => renderWoerter(), stand: () => renderStand(),
   themen: () => Learn.renderThemen(), thema: () => Learn.renderThema(viewArg), lektion: () => Learn.renderLektion(viewArg), ueben: () => Learn.renderUeben(),
   schreiben: () => Learn.renderSchreiben(), quiz: () => Learn.renderQuiz(), artikel: () => Learn.renderArtikel(),
+  "desktop-login": () => renderDeskLogin(viewArg),
   erklaer: () => Learn.renderErklaer(), duell: () => Learn.renderDuell(viewArg), saetze: () => Saetze.renderSaetze(viewArg),
 };
 let viewArg = "";
@@ -656,11 +675,12 @@ document.addEventListener("click", async (e) => {
     case "mineClear": mine.preview = null; mine.err = ""; renderPreview(); break;
     case "delCustom": { const w = BY.get(r); St.removeCustom(r); closeSheet(); if (view === "woerter") renderWoerter(); toast(`„${w?.w}“ gelöscht`); break; }
     case "ownSentence": closeSheet(); location.hash = `saetze/eigen~${r}`; break;
+    case "deskGoogle": deskGoogle(); break;
     case "account": openAccount(); break;
     case "mode-up": openAccount("up"); break;
     case "mode-in": openAccount("in"); break;
     case "closeSheet": closeSheet(); break;
-    case "google": t.disabled = true; try { await cloud.signInGoogle(); closeSheet(); } catch (x) { console.warn(x); openAccount("in", authMsg(x)); } break;
+    case "google": t.disabled = true; if (cloud.desktop) toast("Google-Anmeldung im Browser – danach geht es hier automatisch weiter"); try { await cloud.signInGoogle(); closeSheet(); } catch (x) { console.warn(x); openAccount("in", authMsg(x)); } break;
     case "forgot": { const em = document.querySelector('#authForm [name="email"]')?.value; if (!em) { openAccount("in", "Bitte zuerst deine E-Mail-Adresse eintragen."); break; } try { await cloud.resetPassword(em); toast("E-Mail zum Zurücksetzen verschickt"); } catch (x) { openAccount("in", authMsg(x)); } break; }
     case "signout": await cloud.pushForget(); push = { loaded: false, on: false, hour: 18, busy: false, err: "" }; await cloud.signOut(); closeSheet(); St.replaceState(St.fresh()); lsSet(LS, St.S); toast("Abgemeldet"); render(); break;
     case "voiceTest": speak(SAMPLE); break;

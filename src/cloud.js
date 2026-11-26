@@ -37,7 +37,34 @@ export const cloud = {
   async init() { await load(); },
   onUser(fn) { userListeners.add(fn); if (F) fn(user); },
 
+  /** Running inside the Windows app (src-tauri), which injects window.__WZ_DESKTOP = { port }. */
+  get desktop() { return typeof window !== "undefined" && !!window.__WZ_DESKTOP; },
+  /** Windows app: Google sign-in happens in the normal browser (Google blocks embedded windows); the credential comes back via the app. */
+  async desktopGoogle() {
+    const { auth, fa } = F || (await load());
+    const state = crypto.randomUUID();
+    const url = `${location.origin}/#desktop-login/${window.__WZ_DESKTOP.port}~${state}`;
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { window.__wzDesktopLogin = null; reject(Object.assign(new Error("timeout"), { code: "auth/timeout" })); }, 10 * 60 * 1000);
+      window.__wzDesktopLogin = async (d) => {
+        if (!d || d.state !== state) return; clearTimeout(t); window.__wzDesktopLogin = null;
+        try { await fa.signInWithCredential(auth, fa.GoogleAuthProvider.credential(d.idToken || null, d.accessToken || null)); resolve(); } catch (e) { reject(e); }
+      };
+      location.href = "/__desktop_open?u=" + encodeURIComponent(url); // the app opens this in the normal browser
+    });
+  },
+  /** Normal browser, opened by the Windows app: sign in with Google and pass the credential to the app on this PC. */
+  async googleHandoff(port, state) {
+    const { auth, fa } = F || (await load());
+    const p = new fa.GoogleAuthProvider(); p.setCustomParameters({ prompt: "select_account" });
+    const res = await fa.signInWithPopup(auth, p);
+    const c = fa.GoogleAuthProvider.credentialFromResult(res);
+    if (!c) throw new Error("no-credential");
+    const r = await fetch(`http://127.0.0.1:${Number(port)}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state, idToken: c.idToken || "", accessToken: c.accessToken || "" }) });
+    if (!r.ok) throw new Error("handoff");
+  },
   async signInGoogle() {
+    if (this.desktop) return this.desktopGoogle();
     const { auth, fa } = F || (await load()); const p = new fa.GoogleAuthProvider(); p.setCustomParameters({ prompt: "select_account" });
     const mobile = matchMedia("(pointer: coarse)").matches || navigator.standalone || matchMedia("(display-mode: standalone)").matches;
     if (mobile) return fa.signInWithRedirect(auth, p);
