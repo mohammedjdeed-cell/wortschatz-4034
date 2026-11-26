@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy:firebase": "npm run build && firebase deploy --only hosting,firestore:rules"
+    "deploy:firebase": "npm run build && firebase deploy --only hosting,firestore:rules",
+    "desktop:build": "tauri build"
   },
   "engines": {
     "node": ">=22"
@@ -21,6 +22,7 @@
     "ts-fsrs": "^6.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "vite": "^8.3.8",
     "vite-plugin-pwa": "^2.0.0"
   }

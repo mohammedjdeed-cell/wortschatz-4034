@@ -8,3 +8,6 @@ dev-dist
 .vercel
 *.log
 .DS_Store
+
+src-tauri/target/
+src-tauri/gen/
