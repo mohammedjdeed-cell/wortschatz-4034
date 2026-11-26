@@ -1,6 +1,6 @@
 [package]
 name = "wortschatz-4034"
-version = "2.0.1"
+version = "2.0.2"
 description = "Wortschatz 4034 – Windows desktop app"
 edition = "2021"
 

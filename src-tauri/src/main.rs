@@ -40,13 +40,27 @@ fn main() {
             let nav = app.handle().clone();
             let handle = app.handle().clone();
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(APP.parse::<Url>().expect("app url")))
+            // First start of a new app version: clear the webview's cached site data (old service worker / old code).
+            let version = app.package_info().version.to_string();
+            let marker = app.path().app_data_dir().ok().map(|d| d.join("webview-version"));
+            let fresh = marker.as_ref().map(|m| std::fs::read_to_string(m).unwrap_or_default() != version).unwrap_or(false);
+
+            let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::External("about:blank".parse::<Url>().expect("blank")))
                 .title("Wortschatz 4034")
                 .inner_size(1280.0, 860.0)
                 .min_inner_size(380.0, 560.0)
                 .center()
                 .initialization_script(&format!("window.__WZ_DESKTOP = {{ port: {port} }};"))
                 .on_navigation(move |url: &Url| {
+                    // An in-window Google sign-in (old cached code) must never be handed to the browser: it cannot finish there.
+                    let auth_redirect = url.host_str() == Some("accounts.google.com")
+                        || (url.host_str() == Some(HOST) && url.path().starts_with("/__/auth/handler"));
+                    if auth_redirect {
+                        if let Some(w) = nav.get_webview_window("main") {
+                            let _ = w.eval("location.replace('/')");
+                        }
+                        return false;
+                    }
                     if url.host_str() == Some(HOST) {
                         // the app asks to open a page in the normal browser (Google login, external links)
                         if url.path() == "/__desktop_open" {
@@ -64,6 +78,14 @@ fn main() {
                     true
                 })
                 .build()?;
+            if fresh {
+                let _ = win.clear_all_browsing_data();
+                if let Some(m) = &marker {
+                    let _ = std::fs::create_dir_all(m.parent().unwrap());
+                    let _ = std::fs::write(m, &version);
+                }
+            }
+            win.navigate(APP.parse::<Url>().expect("app url"))?;
 
             std::thread::spawn(move || {
                 for mut req in server.incoming_requests() {
